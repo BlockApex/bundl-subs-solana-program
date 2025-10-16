@@ -28,7 +28,6 @@ describe("bundl", () => {
   anchor.setProvider(provider);
 
   const program = anchor.workspace.Bundl as Program<Bundl>;
-  const authority = provider.wallet.publicKey;
 
   let controllerPda: anchor.web3.PublicKey;
   let controllerBump: number;
@@ -42,6 +41,9 @@ describe("bundl", () => {
   let recipientTokenAccount: anchor.web3.PublicKey;
 
   before(async () => {
+    // Airdrop some SOL to the user and recipient
+    await requestAirdrop(provider.connection, bundlKeypair.publicKey, 2);
+
     // Step 1: Create test mint (USDC)
     mint = await createMint(
       provider.connection,
@@ -106,7 +108,7 @@ describe("bundl", () => {
           await program.methods
             .initializeController()
             .accounts({
-              authority: authority,
+              authority: user,
               mintAccount: mint,
             })
             .signers([]) // authority already set in provider
@@ -139,7 +141,7 @@ describe("bundl", () => {
         await program.methods
           .initializeController()
           .accounts({
-            authority: authority,
+            authority: user,
             mintAccount: mint,
             // controller: controllerPda, // you can add this, but it is auto derived so no need
             // systemProgram: anchor.web3.SystemProgram.programId, // also auto added
@@ -153,7 +155,7 @@ describe("bundl", () => {
           );
 
         // Check controller values
-        assert.ok(controllerAccount.user.equals(authority));
+        assert.ok(controllerAccount.user.equals(user));
         assert.ok(controllerAccount.userTokenAccount.equals(userTokenAccount));
         assert.ok(controllerAccount.bundleCounter.toNumber() == 0);
         assert.ok(controllerAccount.bump === controllerBump);
@@ -167,7 +169,7 @@ describe("bundl", () => {
         await program.methods
           .initializeController()
           .accounts({
-            authority: authority,
+            authority: user,
             mintAccount: mint,
           })
           .signers([]) // authority already set in provider
@@ -197,10 +199,100 @@ describe("bundl", () => {
       // await program.methods
       //   .initializeController()
       //   .accounts({
-      //     authority: authority,
+      //     authority: user,
       //     mintAccount: mint,
       //   })
       //   .rpc();
+    });
+
+    it("given percentages do not sum to 100, then fails with `InvalidPercentages`", async () => {
+      const amountPerInterval = 100_000_000; // 100 USDC
+      const interval = 30 * 24 * 60 * 60; // 30 days in seconds
+
+      let failed = false;
+      try {
+        // Call the add_bundle instruction
+        await program.methods
+          .addBundle(
+            new BN(amountPerInterval),
+            new BN(interval),
+            [recipientTokenAccount],
+            [20],
+            1
+          )
+          .accounts({
+            user: user,
+            authority: bundlKeypair.publicKey,
+          })
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "InvalidPercentages");
+      }
+
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
+    it("given more than 5 recipients, then fails with `InvalidNumRecipients`", async () => {
+      const amountPerInterval = 100_000_000; // 100 USDC
+      const interval = 30 * 24 * 60 * 60; // 30 days in seconds
+
+      let failed = false;
+      try {
+        // Call the add_bundle instruction
+        await program.methods
+          .addBundle(
+            new BN(amountPerInterval),
+            new BN(interval),
+            [recipientTokenAccount],
+            [20],
+            6
+          )
+          .accounts({
+            user: user,
+            authority: bundlKeypair.publicKey,
+          })
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "InvalidNumRecipients");
+      }
+
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
+    it("given 0 recipients, then fails with `InvalidNumRecipients`", async () => {
+      const amountPerInterval = 100_000_000; // 100 USDC
+      const interval = 30 * 24 * 60 * 60; // 30 days in seconds
+
+      let failed = false;
+      try {
+        // Call the add_bundle instruction
+        await program.methods
+          .addBundle(
+            new BN(amountPerInterval),
+            new BN(interval),
+            [recipientTokenAccount],
+            [20],
+            0
+          )
+          .accounts({
+            user: user,
+            authority: bundlKeypair.publicKey,
+          })
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "InvalidNumRecipients");
+      }
+
+      assert.ok(failed, "Expected call to fail but it succeeded");
     });
 
     it("Adds a bundle", async () => {
@@ -211,17 +303,26 @@ describe("bundl", () => {
 
       // Call the add_bundle instruction
       await program.methods
-        .addBundle(new BN(amountPerInterval), new BN(interval))
+        .addBundle(
+          new BN(amountPerInterval),
+          new BN(interval),
+          [recipientTokenAccount, recipientTokenAccount, recipientTokenAccount, recipientTokenAccount],
+          [20, 20, 20, 40],
+          4
+        )
         .accounts({
-          authority: authority,
+          user: user,
+          authority: bundlKeypair.publicKey,
         })
+        .signers([bundlKeypair])
         .rpc();
 
-      [bundlePda, bundleBump] =
-        await anchor.web3.PublicKey.findProgramAddressSync(
-          [seed, controllerPda.toBuffer()],
-          program.programId
-        );
+      const result = await anchor.web3.PublicKey.findProgramAddressSync(
+        [seed, controllerPda.toBuffer()],
+        program.programId
+      );
+      bundlePda = result[0];
+      bundleBump = result[1];
 
       // fetch the controller account to check bundle counter increment
       const controllerAccount =
@@ -242,6 +343,19 @@ describe("bundl", () => {
       );
       assert.ok(bundleAccount.interval.toNumber() == interval);
       assert.ok(bundleAccount.lastPaid.toNumber() == 0);
+      assert.ok(bundleAccount.numRecipients == 4);
+      assert.ok(bundleAccount.percentages[0] == 20);
+      assert.ok(bundleAccount.percentages[1] == 20);
+      assert.ok(bundleAccount.percentages[2] == 20);
+      assert.ok(bundleAccount.percentages[3] == 40);
+      assert.ok(bundleAccount.percentages[4] == 0);
+
+      for (let i = 0; i < 4; i++) {
+        assert.ok(
+          bundleAccount.userAtas[i].equals(recipientTokenAccount)
+        );
+      }
+      assert.ok(bundleAccount.userAtas[4].equals(anchor.web3.SystemProgram.programId));
     });
   });
 
@@ -254,7 +368,7 @@ describe("bundl", () => {
         await program.methods
           .trigger(new BN(bundleIdentifier))
           .accounts({
-            authority: authority,
+            authority: user,
             user: user,
             mintAccount: mint,
             recipient: recipientKeyPair.publicKey,
@@ -352,10 +466,18 @@ describe("bundl", () => {
 
       // Create a new bundle with 30s interval
       await program.methods
-        .addBundle(amountPerInterval, interval)
+        .addBundle(
+          amountPerInterval,
+          interval,
+          [recipientTokenAccount],
+          [100],
+          1
+        )
         .accounts({
-          authority: authority,
+          authority: bundlKeypair.publicKey,
+          user: user,
         })
+        .signers([bundlKeypair])
         .rpc();
 
       // Trigger once — should succeed and set `last_paid`
@@ -406,3 +528,25 @@ describe("bundl", () => {
     });
   });
 });
+
+async function requestAirdrop(
+  connection: anchor.web3.Connection,
+  publicKey: anchor.web3.PublicKey,
+  amount: number
+) {
+  const signature = await connection.requestAirdrop(
+    publicKey,
+    amount * anchor.web3.LAMPORTS_PER_SOL
+  );
+
+  const { blockhash, lastValidBlockHeight } =
+    await connection.getLatestBlockhash();
+
+  await connection.confirmTransaction({
+    blockhash,
+    lastValidBlockHeight,
+    signature,
+  });
+
+  // console.log(`Airdropped ${amount} SOL to ${publicKey.toBase58()}`);
+}

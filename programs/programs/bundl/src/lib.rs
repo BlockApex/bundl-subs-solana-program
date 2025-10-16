@@ -45,7 +45,33 @@ pub mod bundl {
     /// * `ctx` - The context containing the accounts involved in the transaction
     /// * `amount_per_interval` - The amount to be paid per interval
     /// * `interval` - The interval in seconds
-    pub fn add_bundle(ctx: Context<AddBundle>, amount_per_interval: u64, interval: u64) -> Result<()> {
+    /// * `user_atas` - The associated token accounts of the recipients
+    /// * `percentages` - The percentages for each recipient
+    /// * `num_recipients` - The number of recipients
+    #[access_control(check_owner(&ctx.accounts.authority))]
+    pub fn add_bundle(
+        ctx: Context<AddBundle>, 
+        amount_per_interval: u64, 
+        interval: u64, 
+        user_atas: [Pubkey; 5],
+        percentages: [u8; 5],
+        num_recipients: u8,
+    ) -> Result<()> {
+        // assert valid num_recipients
+        if num_recipients == 0 || num_recipients > 5 {
+            return Err(error!(ErrorCode::InvalidNumRecipients));
+        }
+
+        // assert percentages sum to 100
+        let total_percentage: u8 = percentages.iter().take(num_recipients as usize).sum();
+        if total_percentage != 100 {
+            return Err(error!(ErrorCode::InvalidPercentages));
+        }
+
+        for i in 0..5 {
+            msg!("percentages[{}] = {}", i, percentages[i]);
+        }
+        
         // read from ctx
         let controller = &mut ctx.accounts.controller;
         let bundle = &mut ctx.accounts.bundle;
@@ -55,6 +81,9 @@ pub mod bundl {
         bundle.amount_per_interval = amount_per_interval;
         bundle.interval = interval as i64;
         bundle.last_paid = 0;
+        bundle.user_atas = user_atas;
+        bundle.percentages = percentages;
+        bundle.num_recipients = num_recipients;
 
         // increment bundle counter
         controller.bundle_counter += 1;

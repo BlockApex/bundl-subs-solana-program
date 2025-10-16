@@ -5,7 +5,7 @@ use crate::{Bundle, UserBundlSubscriptionController};
 pub struct AddBundle<'info> {
     #[account(
         mut,
-        seeds = [b"controller", authority.key().as_ref()],
+        seeds = [b"controller", user.key().as_ref()],
         bump = controller.bump,
     )]
     pub controller: Account<'info, UserBundlSubscriptionController>,
@@ -19,6 +19,10 @@ pub struct AddBundle<'info> {
     )]
     pub bundle: Account<'info, Bundle>,
     
+    /// CHECK: recipient is only used to derive its associated token account.
+    #[account(mut)]
+    pub user: AccountInfo<'info>,
+
     #[account(mut)]
     pub authority: Signer<'info>,
 

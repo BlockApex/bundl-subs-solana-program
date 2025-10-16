@@ -12,4 +12,8 @@ pub enum ErrorCode {
     Unauthorized,
     #[msg("The required interval has not yet passed since the last payment")]
     IntervalNotPassed,
+    #[msg("Percentages must sum to 100")]
+    InvalidPercentages,
+    #[msg("Number of recipients must be between 1 and 5")]
+    InvalidNumRecipients
 }
