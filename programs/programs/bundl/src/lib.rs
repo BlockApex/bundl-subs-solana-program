@@ -138,8 +138,7 @@ pub mod bundl {
             let recipient_info = &remaining_accounts[i as usize];
             let recipient_ata = Account::<TokenAccount>::try_from(recipient_info)?;
 
-            // TODO: require to match expected recipient ata
-            // assert_eq!(recipient_ata.key(), user_atas[i as usize]);
+            require_eq!(recipient_ata.key(), bundle.user_atas[i as usize], ErrorCode::InvalidRecipient);
 
             // transfer tokens from user to recipient
             let cpi_accounts = anchor_spl::token::Transfer {

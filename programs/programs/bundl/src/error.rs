@@ -18,4 +18,6 @@ pub enum ErrorCode {
     InvalidNumRecipients,
     #[msg("Number of recipients provided does not match the bundle")]
     InvalidNumRecipientsProvided,
+    #[msg("Invalid recipient")]
+    InvalidRecipient,
 }

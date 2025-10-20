@@ -20,8 +20,10 @@ describe("bundl", () => {
   const recipientSecretKey = Uint8Array.from(
     JSON.parse(process.env.RECIPIENT!)
   );
-  const recipientKeyPair =
-    anchor.web3.Keypair.fromSecretKey(recipientSecretKey);
+  const recipientKeyPair0 = anchor.web3.Keypair.generate();
+  const recipientKeyPair1 = anchor.web3.Keypair.generate();
+  const recipientKeyPair2 = anchor.web3.Keypair.generate();
+  const recipientKeyPair3 = anchor.web3.Keypair.generate();
 
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
@@ -39,7 +41,10 @@ describe("bundl", () => {
   let user = provider.wallet.publicKey;
   let mint: anchor.web3.PublicKey;
   let userTokenAccount: anchor.web3.PublicKey;
-  let recipientTokenAccount: anchor.web3.PublicKey;
+  let recipientTokenAccount0: anchor.web3.PublicKey;
+  let recipientTokenAccount1: anchor.web3.PublicKey;
+  let recipientTokenAccount2: anchor.web3.PublicKey;
+  let recipientTokenAccount3: anchor.web3.PublicKey;
 
   before(async () => {
     // Airdrop some SOL to the user and recipient
@@ -62,11 +67,33 @@ describe("bundl", () => {
       user
     );
 
-    recipientTokenAccount = await createAssociatedTokenAccount(
+    // create ATAs for new recipients
+    recipientTokenAccount0 = await createAssociatedTokenAccount(
       provider.connection,
       provider.wallet.payer,
       mint,
-      recipientKeyPair.publicKey // owner of the ATA
+      recipientKeyPair0.publicKey // owner of the ATA
+    );
+
+    recipientTokenAccount1 = await createAssociatedTokenAccount(
+      provider.connection,
+      provider.wallet.payer,
+      mint,
+      recipientKeyPair1.publicKey // owner of the ATA
+    );
+
+    recipientTokenAccount2 = await createAssociatedTokenAccount(
+      provider.connection,
+      provider.wallet.payer,
+      mint,
+      recipientKeyPair2.publicKey // owner of the ATA
+    );
+
+    recipientTokenAccount3 = await createAssociatedTokenAccount(
+      provider.connection,
+      provider.wallet.payer,
+      mint,
+      recipientKeyPair3.publicKey // owner of the ATA
     );
 
     // Step 3: Mint tokens to user
@@ -217,7 +244,7 @@ describe("bundl", () => {
           .addBundle(
             new BN(amountPerInterval),
             new BN(interval),
-            [recipientTokenAccount],
+            [recipientTokenAccount0],
             [20],
             1
           )
@@ -247,7 +274,7 @@ describe("bundl", () => {
           .addBundle(
             new BN(amountPerInterval),
             new BN(interval),
-            [recipientTokenAccount],
+            [recipientTokenAccount0],
             [20],
             6
           )
@@ -277,7 +304,7 @@ describe("bundl", () => {
           .addBundle(
             new BN(amountPerInterval),
             new BN(interval),
-            [recipientTokenAccount],
+            [recipientTokenAccount0],
             [20],
             0
           )
@@ -308,10 +335,10 @@ describe("bundl", () => {
           new BN(amountPerInterval),
           new BN(interval),
           [
-            recipientTokenAccount,
-            recipientTokenAccount,
-            recipientTokenAccount,
-            recipientTokenAccount,
+            recipientTokenAccount0,
+            recipientTokenAccount1,
+            recipientTokenAccount2,
+            recipientTokenAccount3,
           ],
           [20, 20, 20, 40],
           4
@@ -355,10 +382,10 @@ describe("bundl", () => {
       assert.ok(bundleAccount.percentages[2] == 20);
       assert.ok(bundleAccount.percentages[3] == 40);
       assert.ok(bundleAccount.percentages[4] == 0);
-
-      for (let i = 0; i < 4; i++) {
-        assert.ok(bundleAccount.userAtas[i].equals(recipientTokenAccount));
-      }
+      assert.ok(bundleAccount.userAtas[0].equals(recipientTokenAccount0));
+      assert.ok(bundleAccount.userAtas[1].equals(recipientTokenAccount1));
+      assert.ok(bundleAccount.userAtas[2].equals(recipientTokenAccount2));
+      assert.ok(bundleAccount.userAtas[3].equals(recipientTokenAccount3));
       assert.ok(
         bundleAccount.userAtas[4].equals(anchor.web3.SystemProgram.programId)
       );
@@ -376,10 +403,10 @@ describe("bundl", () => {
           new BN(amountPerInterval),
           new BN(interval),
           [
-            recipientTokenAccount,
-            recipientTokenAccount,
-            recipientTokenAccount,
-            recipientTokenAccount,
+            recipientTokenAccount0,
+            recipientTokenAccount0,
+            recipientTokenAccount0,
+            recipientTokenAccount0,
           ],
           [100],
           1
@@ -425,7 +452,7 @@ describe("bundl", () => {
     });
 
     it("given invalid number of recipients provided, it fails with `InvalidNumRecipientsProvided`", async () => {
-      let failed = false
+      let failed = false;
       try {
         const bundleIdentifier = 1;
         await program.methods
@@ -448,7 +475,7 @@ describe("bundl", () => {
     it("given first time payment, it triggers a bundle payment", async () => {
       // get balance of recipient before
       const recipientBefore = await provider.connection.getTokenAccountBalance(
-        recipientTokenAccount
+        recipientTokenAccount0
       );
       // get balance of user before
       const userBefore = await provider.connection.getTokenAccountBalance(
@@ -465,7 +492,7 @@ describe("bundl", () => {
         })
         .remainingAccounts([
           {
-            pubkey: recipientTokenAccount,
+            pubkey: recipientTokenAccount0,
             isWritable: true,
             isSigner: false,
           },
@@ -475,7 +502,7 @@ describe("bundl", () => {
 
       // get balance of recipient after
       const recipientAfter = await provider.connection.getTokenAccountBalance(
-        recipientTokenAccount
+        recipientTokenAccount0
       );
 
       // fetch bundle account to check last paid update
@@ -523,7 +550,7 @@ describe("bundl", () => {
           })
           .remainingAccounts([
             {
-              pubkey: recipientTokenAccount,
+              pubkey: recipientTokenAccount0,
               isWritable: true,
               isSigner: false,
             },
@@ -539,36 +566,9 @@ describe("bundl", () => {
     });
 
     it("given multiple splits, it triggers a bundle payment to multiple recipients", async () => {
-      // create 3 recipient keys
-      const recipientKeyPair1 = anchor.web3.Keypair.generate();
-      const recipientKeyPair2 = anchor.web3.Keypair.generate();
-      const recipientKeyPair3 = anchor.web3.Keypair.generate();
-
-      // create ATAs for new recipients
-      const recipientTokenAccount1 = await createAssociatedTokenAccount(
-        provider.connection,
-        provider.wallet.payer,
-        mint,
-        recipientKeyPair1.publicKey // owner of the ATA
-      );
-
-      const recipientTokenAccount2 = await createAssociatedTokenAccount(
-        provider.connection,
-        provider.wallet.payer,
-        mint,
-        recipientKeyPair2.publicKey // owner of the ATA
-      );
-
-      const recipientTokenAccount3 = await createAssociatedTokenAccount(
-        provider.connection,
-        provider.wallet.payer,
-        mint,
-        recipientKeyPair3.publicKey // owner of the ATA
-      );
-
       // get balance of recipient before
-      const recipientBefore = await provider.connection.getTokenAccountBalance(
-        recipientTokenAccount
+      const recipient0Before = await provider.connection.getTokenAccountBalance(
+        recipientTokenAccount0
       );
 
       const recipient1Before = await provider.connection.getTokenAccountBalance(
@@ -598,7 +598,7 @@ describe("bundl", () => {
         })
         .remainingAccounts([
           {
-            pubkey: recipientTokenAccount,
+            pubkey: recipientTokenAccount0,
             isWritable: true,
             isSigner: false,
           },
@@ -618,8 +618,8 @@ describe("bundl", () => {
         .rpc();
 
       // get balance of recipient after
-      const recipientAfter = await provider.connection.getTokenAccountBalance(
-        recipientTokenAccount
+      const recipient0After = await provider.connection.getTokenAccountBalance(
+        recipientTokenAccount0
       );
 
       const recipient1After = await provider.connection.getTokenAccountBalance(
@@ -639,8 +639,8 @@ describe("bundl", () => {
 
       // check the difference
       const difference =
-        recipientAfter.value.uiAmount! -
-        recipientBefore.value.uiAmount! +
+        recipient0After.value.uiAmount! -
+        recipient0Before.value.uiAmount! +
         recipient1After.value.uiAmount! -
         recipient1Before.value.uiAmount! +
         recipient2After.value.uiAmount! -
@@ -653,8 +653,8 @@ describe("bundl", () => {
       ); // 100 USDC
 
       // assert recipient splits are correct
-      const split =
-        recipientAfter.value.uiAmount! - recipientBefore.value.uiAmount!;
+      const split0 =
+        recipient0After.value.uiAmount! - recipient0Before.value.uiAmount!;
       const split1 =
         recipient1After.value.uiAmount! - recipient1Before.value.uiAmount!;
       const split2 =
@@ -662,7 +662,7 @@ describe("bundl", () => {
       const split3 =
         recipient3After.value.uiAmount! - recipient3Before.value.uiAmount!;
 
-      assert.ok(split === 20, "invalid split"); // 20 USDC
+      assert.ok(split0 === 20, "invalid split"); // 20 USDC
       assert.ok(split1 === 20, "invalid split 1"); // 20 USDC
       assert.ok(split2 === 20, "invalid split 2"); // 20 USDC
       assert.ok(split3 === 40, "invalid split 3"); // 40 USDC
@@ -698,7 +698,7 @@ describe("bundl", () => {
         .addBundle(
           amountPerInterval,
           interval,
-          [recipientTokenAccount],
+          [recipientTokenAccount0],
           [100],
           1
         )
@@ -719,7 +719,7 @@ describe("bundl", () => {
         })
         .remainingAccounts([
           {
-            pubkey: recipientTokenAccount,
+            pubkey: recipientTokenAccount0,
             isWritable: true,
             isSigner: false,
           },
@@ -739,7 +739,7 @@ describe("bundl", () => {
           })
           .remainingAccounts([
             {
-              pubkey: recipientTokenAccount,
+              pubkey: recipientTokenAccount0,
               isWritable: true,
               isSigner: false,
             },
@@ -765,7 +765,7 @@ describe("bundl", () => {
         })
         .remainingAccounts([
           {
-            pubkey: recipientTokenAccount,
+            pubkey: recipientTokenAccount0,
             isWritable: true,
             isSigner: false,
           },
