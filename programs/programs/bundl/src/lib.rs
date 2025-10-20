@@ -138,6 +138,12 @@ pub mod bundl {
             let recipient_info = &remaining_accounts[i as usize];
             let recipient_ata = Account::<TokenAccount>::try_from(recipient_info)?;
 
+            msg!(
+                "Transferring {} to recipient {}",
+                split_amounts[i as usize],
+                recipient_info.key()
+            );
+
             require_eq!(recipient_ata.key(), bundle.user_atas[i as usize], ErrorCode::InvalidRecipient);
 
             // transfer tokens from user to recipient

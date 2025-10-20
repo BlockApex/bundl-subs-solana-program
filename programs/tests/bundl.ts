@@ -566,6 +566,9 @@ describe("bundl", () => {
     });
 
     it("given multiple splits, it triggers a bundle payment to multiple recipients", async () => {
+      // fetch bundle account to check last paid update
+      const bundleAccount = await program.account.bundle.fetch(bundlePda1);
+
       // get balance of recipient before
       const recipient0Before = await provider.connection.getTokenAccountBalance(
         recipientTokenAccount0
@@ -588,6 +591,17 @@ describe("bundl", () => {
         userTokenAccount
       );
 
+      // fetch the bundle account to get ATAs manually because js only references the first index
+      const accountInfo = await provider.connection.getAccountInfo(bundlePda); 
+      // Skip the discriminator (8 bytes) + 4 u64/i64 fields (40 bytes)
+      const offset = 8 + 8 + 8 + 8 + 8; // = 48
+      const data = accountInfo.data.slice(offset);
+      const atas = [];
+      for (let i = 0; i < 5; i++) {
+        atas.push(new anchor.web3.PublicKey(data.slice(i * 32, (i + 1) * 32)));
+      }
+      // console.log(atas.map((x) => x.toBase58()));
+
       const bundleIdentifier = 0;
       await program.methods
         .trigger(new BN(bundleIdentifier))
@@ -598,18 +612,18 @@ describe("bundl", () => {
         })
         .remainingAccounts([
           {
-            pubkey: recipientTokenAccount0,
+            pubkey: atas[0],
             isWritable: true,
             isSigner: false,
           },
-          { pubkey: recipientTokenAccount1, isWritable: true, isSigner: false },
+          { pubkey: atas[1], isWritable: true, isSigner: false },
           {
-            pubkey: recipientTokenAccount2,
+            pubkey: atas[2],
             isWritable: true,
             isSigner: false,
           },
           {
-            pubkey: recipientTokenAccount3,
+            pubkey: atas[3],
             isWritable: true,
             isSigner: false,
           },
@@ -633,9 +647,6 @@ describe("bundl", () => {
       const recipient3After = await provider.connection.getTokenAccountBalance(
         recipientTokenAccount3
       );
-
-      // fetch bundle account to check last paid update
-      const bundleAccount = await program.account.bundle.fetch(bundlePda1);
 
       // check the difference
       const difference =
