@@ -25,16 +25,6 @@ pub struct Trigger<'info> {
         associated_token::authority = user
     )]
     pub user_token_account: Account<'info, TokenAccount>,
-    
-    #[account(mut,
-        associated_token::mint = mint_account,
-        associated_token::authority = recipient
-    )]
-    pub to_token_account: Account<'info, TokenAccount>,
-    
-    /// CHECK: recipient is only used to derive its associated token account.
-    #[account(mut)]
-    pub recipient: AccountInfo<'info>,
 
     /// CHECK: recipient is only used to derive its associated token account.
     #[account(mut)]

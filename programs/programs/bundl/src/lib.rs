@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use crate::program_option::COption;
+use anchor_lang::prelude::*;
 pub mod state;
 pub use state::*;
 pub mod error;
@@ -11,12 +11,14 @@ const OWNER: &str = "BTFsHVsT8V9gXrgDNKdCw574dR9X8hom9KWsiKBvjbSi";
 
 #[program]
 pub mod bundl {
+    use anchor_spl::token::TokenAccount;
+
     use super::*;
 
     /// Initializes the user bundl subscription controller account
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
-    pub fn initialize_controller(ctx: Context<InitializeController>,) -> Result<()> {
+    pub fn initialize_controller(ctx: Context<InitializeController>) -> Result<()> {
         // read from ctx
         let controller = &mut ctx.accounts.controller;
         let user_token_account = &ctx.accounts.from_token_account;
@@ -50,9 +52,9 @@ pub mod bundl {
     /// * `num_recipients` - The number of recipients
     #[access_control(check_owner(&ctx.accounts.authority))]
     pub fn add_bundle(
-        ctx: Context<AddBundle>, 
-        amount_per_interval: u64, 
-        interval: u64, 
+        ctx: Context<AddBundle>,
+        amount_per_interval: u64,
+        interval: u64,
         user_atas: [Pubkey; 5],
         percentages: [u8; 5],
         num_recipients: u8,
@@ -71,7 +73,7 @@ pub mod bundl {
         for i in 0..5 {
             msg!("percentages[{}] = {}", i, percentages[i]);
         }
-        
+
         // read from ctx
         let controller = &mut ctx.accounts.controller;
         let bundle = &mut ctx.accounts.bundle;
@@ -96,10 +98,17 @@ pub mod bundl {
     /// * `ctx` - The context containing the accounts involved in the transaction
     /// * `_bundle_identifier` - The identifier of the bundle to trigger
     #[access_control(check_owner(&ctx.accounts.authority))]
-    pub fn trigger(ctx: Context<Trigger>, _bundle_identifier: u64) -> Result<()> {
+    pub fn trigger<'info>(
+        ctx: Context<'_, '_, 'info, 'info, Trigger<'info>>,
+        _bundle_identifier: u64,
+    ) -> Result<()> {
         // read from ctx
-        let controller = &mut ctx.accounts.controller;
         let bundle = &mut ctx.accounts.bundle;
+        let controller = &ctx.accounts.controller;
+        let user_token_account = &ctx.accounts.user_token_account;
+        let remaining_accounts = ctx.remaining_accounts;
+
+        // TODO: verify remaining_accounts length matches num_recipients
 
         // check if enough time has passed since last payment
         let clock = Clock::get()?;
@@ -109,30 +118,62 @@ pub mod bundl {
         }
 
         // check if user has enough balance
-        let user_token_account = &ctx.accounts.user_token_account;
         if user_token_account.amount < bundle.amount_per_interval {
             return Err(error!(ErrorCode::InsufficientFunds));
         }
 
-        // transfer tokens from user to recipient
-        let cpi_accounts = anchor_spl::token::Transfer {
-            from: user_token_account.to_account_info(),
-            to: ctx.accounts.to_token_account.to_account_info(),
-            authority: controller.to_account_info(),
-        };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        anchor_spl::token::transfer(cpi_ctx.with_signer(&[&[
-            b"controller",
-            controller.user.as_ref(),
-            &[controller.bump],
-        ]]), bundle.amount_per_interval)?;
+        let split_amounts = split_amounts(
+            bundle.percentages,
+            bundle.num_recipients,
+            bundle.amount_per_interval,
+        );
+
+        // print split amounts for debugging
+        for i in 0..bundle.num_recipients {
+            // Borrow instead of clone so we pass &AccountInfo
+            let recipient_info = &remaining_accounts[i as usize];
+            let recipient_ata = Account::<TokenAccount>::try_from(recipient_info)?;
+
+            // TODO: require to match expected recipient ata
+            // assert_eq!(recipient_ata.key(), user_atas[i as usize]);
+
+            // transfer tokens from user to recipient
+            let cpi_accounts = anchor_spl::token::Transfer {
+                from: user_token_account.to_account_info(),
+                to: recipient_ata.to_account_info(),
+                authority: controller.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            anchor_spl::token::transfer(
+                cpi_ctx.with_signer(&[&[
+                    b"controller",
+                    controller.user.as_ref(),
+                    &[controller.bump],
+                ]]),
+                split_amounts[i as usize],
+            )?;
+        }
 
         // update last paid time
         bundle.last_paid = current_time;
 
         Ok(())
     }
+}
+
+fn split_amounts(percentages: [u8; 5], num_recipients: u8, total_amount: u64) -> [u64; 5] {
+    let mut amounts = [0u64; 5];
+    let mut allocated = 0u64;
+
+    for i in 0..num_recipients {
+        amounts[i as usize] = (total_amount * percentages[i as usize] as u64) / 100;
+        allocated += amounts[i as usize];
+    }
+
+    // TODO: handle rounding issues more gracefully
+
+    amounts
 }
 
 fn check_owner(authority: &Signer) -> Result<()> {
