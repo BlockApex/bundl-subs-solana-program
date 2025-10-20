@@ -424,6 +424,27 @@ describe("bundl", () => {
       assert.ok(failed, "Expected call to fail but it succeeded");
     });
 
+    it("given invalid number of recipients provided, it fails with `InvalidNumRecipientsProvided`", async () => {
+      let failed = false
+      try {
+        const bundleIdentifier = 1;
+        await program.methods
+          .trigger(new BN(bundleIdentifier))
+          .accounts({
+            authority: bundlKeypair.publicKey,
+            user: user,
+            mintAccount: mint,
+          })
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "InvalidNumRecipientsProvided");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
     it("given first time payment, it triggers a bundle payment", async () => {
       // get balance of recipient before
       const recipientBefore = await provider.connection.getTokenAccountBalance(

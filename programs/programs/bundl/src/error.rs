@@ -15,5 +15,7 @@ pub enum ErrorCode {
     #[msg("Percentages must sum to 100")]
     InvalidPercentages,
     #[msg("Number of recipients must be between 1 and 5")]
-    InvalidNumRecipients
+    InvalidNumRecipients,
+    #[msg("Number of recipients provided does not match the bundle")]
+    InvalidNumRecipientsProvided,
 }

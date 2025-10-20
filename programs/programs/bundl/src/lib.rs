@@ -108,7 +108,11 @@ pub mod bundl {
         let user_token_account = &ctx.accounts.user_token_account;
         let remaining_accounts = ctx.remaining_accounts;
 
-        // TODO: verify remaining_accounts length matches num_recipients
+        require_eq!(
+            remaining_accounts.len(),
+            bundle.num_recipients as usize,
+            ErrorCode::InvalidNumRecipientsProvided
+        );
 
         // check if enough time has passed since last payment
         let clock = Clock::get()?;
