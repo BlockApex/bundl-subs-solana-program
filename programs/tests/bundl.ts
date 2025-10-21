@@ -235,6 +235,34 @@ describe("bundl", () => {
       //   .rpc();
     });
 
+    it("given incorrect authority, then fails with `Unauthorized`", async () => {
+      const amountPerInterval = 100_000_000; // 100 USDC
+      const interval = 30 * 24 * 60 * 60; // 30 days in seconds
+      let failed = false;
+      try {
+        // Call the add_bundle instruction
+        await program.methods
+          .addBundle(
+            new BN(amountPerInterval),
+            new BN(interval),
+            [recipientTokenAccount0],
+            1
+          )
+          .accounts({
+            user: user,
+            authority: user, // incorrect authority
+          })
+          .signers([])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "Unauthorized");
+      }
+
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
     it("given more than 5 recipients, then fails with `InvalidNumRecipients`", async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
