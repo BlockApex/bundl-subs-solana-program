@@ -4,6 +4,7 @@ import {
   createApproveInstruction,
   createAssociatedTokenAccount,
   createMint,
+  createTransferInstruction,
   mintTo,
 } from "@solana/spl-token";
 import { BN } from "bn.js";
@@ -36,6 +37,7 @@ describe("bundl", () => {
   let bundlePda: anchor.web3.PublicKey;
   let bundleBump: number;
   let bundlePda1: anchor.web3.PublicKey;
+  let bundlePda2: anchor.web3.PublicKey;
 
   // Token related variables
   let user = provider.wallet.publicKey;
@@ -371,9 +373,7 @@ describe("bundl", () => {
         .addBundle(
           new BN(amountPerInterval),
           new BN(interval),
-          [
-            recipientTokenAccount0,
-          ],
+          [recipientTokenAccount0],
           1
         )
         .accounts({
@@ -470,6 +470,77 @@ describe("bundl", () => {
         assert.equal(err.error.errorCode.code, "InvalidNumRecipientsProvided");
       }
       assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
+    it("given insufficient balance, it fails with `InsufficientFunds`", async () => {
+      // transfer all user tokens to recipient to ensure no tokens
+      const userBalance = await provider.connection.getTokenAccountBalance(
+        userTokenAccount
+      );
+      try {
+        const transferInstruction = createTransferInstruction(
+          userTokenAccount,
+          recipientTokenAccount0,
+          user,
+          userBalance.value.uiAmount! * 1_000_000
+        );
+        const tx = new anchor.web3.Transaction().add(transferInstruction);
+        await provider.sendAndConfirm(tx);
+      } catch (error) {
+        throw error;
+      }
+      // Now attempt to trigger with an amount that exceeds remaining balance
+      let failed = false;
+      try {
+        const bundleIdentifier = 1; // bundle 2 has 1 recipient
+        await program.methods
+          .trigger(new BN(bundleIdentifier), [
+            new BN(200),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+          ])
+          .accounts({
+            authority: bundlKeypair.publicKey,
+            user: user,
+            mintAccount: mint,
+          })
+          .remainingAccounts([
+            {
+              pubkey: recipientTokenAccount0,
+              isWritable: true,
+              isSigner: false,
+            },
+          ])
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // Expect the program to fail with InsufficientFunds
+        if (err.error?.errorCode?.code) {
+          assert.equal(err.error.errorCode.code, "InsufficientFunds");
+        } else {
+          // Re-throw to surface unexpected failures
+          throw err;
+        }
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+
+      // transfer back tokens to user for further tests
+      try {
+        const transferBackIx = createTransferInstruction(
+          recipientTokenAccount0,
+          userTokenAccount,
+          recipientKeyPair0.publicKey,
+          userBalance.value.uiAmount! * 1_000_000
+        );
+        const tx2 = new anchor.web3.Transaction().add(transferBackIx);
+        // set recipient 3 as payer
+        await provider.sendAndConfirm(tx2, [recipientKeyPair0]);
+      } catch (error) {
+        throw error;
+      }
     });
 
     it("given first time payment, it triggers a bundle payment", async () => {
