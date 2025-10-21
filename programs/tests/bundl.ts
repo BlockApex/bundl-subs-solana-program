@@ -327,6 +327,11 @@ describe("bundl", () => {
       const seed = Buffer.alloc(8);
       seed.writeBigUInt64LE(BigInt(0));
 
+      // get sol amount of user
+      const userBalanceBefore = await provider.connection.getBalance(user);
+      // get sol amount of bundl authority
+      const bundlBalanceBefore = await provider.connection.getBalance(bundlKeypair.publicKey);
+
       // Call the add_bundle instruction
       await program.methods
         .addBundle(
@@ -381,6 +386,17 @@ describe("bundl", () => {
       assert.ok(
         bundleAccount.userAtas[4].equals(anchor.web3.SystemProgram.programId)
       );
+
+      // get sol amount of user after
+      const userBalanceAfter = await provider.connection.getBalance(user);
+      // get sol amount of bundl authority after
+      const bundlBalanceAfter = await provider.connection.getBalance(bundlKeypair.publicKey);
+
+      // bundl authority balance after should be more to indicate it received rent
+      assert.ok(bundlBalanceAfter == bundlBalanceBefore, "bundl did not receive rent");
+
+      // sol amount after should be less to indicate user paid rent
+      assert.ok(userBalanceAfter < userBalanceBefore, "user did not pay rent");
     });
   });
 

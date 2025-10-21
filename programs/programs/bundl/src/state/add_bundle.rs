@@ -12,7 +12,7 @@ pub struct AddBundle<'info> {
 
     #[account(
         init, 
-        payer = authority, 
+        payer = user, 
         space = 8 + Bundle::INIT_SPACE, 
         seeds = [controller.bundle_counter.to_le_bytes().as_ref(), controller.key().as_ref()], 
         bump
