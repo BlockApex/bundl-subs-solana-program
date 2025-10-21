@@ -18,13 +18,12 @@ pub struct AddBundle<'info> {
         bump
     )]
     pub bundle: Account<'info, Bundle>,
-    
-    /// CHECK: recipient is only used to derive its associated token account.
-    #[account(mut)]
-    pub user: AccountInfo<'info>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
 
     // the system program
     pub system_program: Program<'info, System>,
