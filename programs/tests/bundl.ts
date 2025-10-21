@@ -472,6 +472,34 @@ describe("bundl", () => {
       assert.ok(failed, "Expected call to fail but it succeeded");
     });
 
+    it("given invalid recipient, it fails with `InvalidRecipient`", async () => {
+      let failed = false;
+      try {
+        const bundleIdentifier = 1;
+        await program.methods
+          .trigger(new BN(bundleIdentifier), amountArray)
+          .accounts({
+            authority: bundlKeypair.publicKey,
+            user: user,
+            mintAccount: mint,
+          })
+          .remainingAccounts([
+            {
+              pubkey: recipientTokenAccount1,
+              isWritable: true,
+              isSigner: false,
+            },
+          ])
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err);
+        assert.equal(err.error.errorCode.code, "InvalidRecipient");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
     it("given insufficient balance, it fails with `InsufficientFunds`", async () => {
       // transfer all user tokens to recipient to ensure no tokens
       const userBalance = await provider.connection.getTokenAccountBalance(
