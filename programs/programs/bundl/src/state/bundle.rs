@@ -8,6 +8,5 @@ pub struct Bundle {
     pub amount_per_interval: u64,
     pub last_paid: i64,
     pub user_atas: [Pubkey; 5],
-    pub percentages: [u8; 5],
     pub num_recipients: u8,
 }

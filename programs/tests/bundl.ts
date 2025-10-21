@@ -233,36 +233,6 @@ describe("bundl", () => {
       //   .rpc();
     });
 
-    it("given percentages do not sum to 100, then fails with `InvalidPercentages`", async () => {
-      const amountPerInterval = 100_000_000; // 100 USDC
-      const interval = 30 * 24 * 60 * 60; // 30 days in seconds
-
-      let failed = false;
-      try {
-        // Call the add_bundle instruction
-        await program.methods
-          .addBundle(
-            new BN(amountPerInterval),
-            new BN(interval),
-            [recipientTokenAccount0],
-            [20],
-            1
-          )
-          .accounts({
-            user: user,
-            authority: bundlKeypair.publicKey,
-          })
-          .signers([bundlKeypair])
-          .rpc();
-      } catch (err: any) {
-        failed = true;
-        // console.log(err)
-        assert.equal(err.error.errorCode.code, "InvalidPercentages");
-      }
-
-      assert.ok(failed, "Expected call to fail but it succeeded");
-    });
-
     it("given more than 5 recipients, then fails with `InvalidNumRecipients`", async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
@@ -275,7 +245,6 @@ describe("bundl", () => {
             new BN(amountPerInterval),
             new BN(interval),
             [recipientTokenAccount0],
-            [20],
             6
           )
           .accounts({
@@ -305,7 +274,6 @@ describe("bundl", () => {
             new BN(amountPerInterval),
             new BN(interval),
             [recipientTokenAccount0],
-            [20],
             0
           )
           .accounts({
@@ -340,7 +308,6 @@ describe("bundl", () => {
             recipientTokenAccount2,
             recipientTokenAccount3,
           ],
-          [20, 20, 20, 40],
           4
         )
         .accounts({
@@ -377,11 +344,6 @@ describe("bundl", () => {
       assert.ok(bundleAccount.interval.toNumber() == interval);
       assert.ok(bundleAccount.lastPaid.toNumber() == 0);
       assert.ok(bundleAccount.numRecipients == 4);
-      assert.ok(bundleAccount.percentages[0] == 20);
-      assert.ok(bundleAccount.percentages[1] == 20);
-      assert.ok(bundleAccount.percentages[2] == 20);
-      assert.ok(bundleAccount.percentages[3] == 40);
-      assert.ok(bundleAccount.percentages[4] == 0);
       assert.ok(bundleAccount.userAtas[0].equals(recipientTokenAccount0));
       assert.ok(bundleAccount.userAtas[1].equals(recipientTokenAccount1));
       assert.ok(bundleAccount.userAtas[2].equals(recipientTokenAccount2));
@@ -393,6 +355,13 @@ describe("bundl", () => {
   });
 
   describe("trigger", async () => {
+    let amountArray = [
+      new BN(100_000_000),
+      new BN(0),
+      new BN(0),
+      new BN(0),
+      new BN(0),
+    ];
     before(async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
@@ -404,11 +373,7 @@ describe("bundl", () => {
           new BN(interval),
           [
             recipientTokenAccount0,
-            recipientTokenAccount0,
-            recipientTokenAccount0,
-            recipientTokenAccount0,
           ],
-          [100],
           1
         )
         .accounts({
@@ -435,7 +400,7 @@ describe("bundl", () => {
       let failed = false;
       try {
         await program.methods
-          .trigger(new BN(bundleIdentifier))
+          .trigger(new BN(bundleIdentifier), amountArray)
           .accounts({
             authority: user,
             user: user,
@@ -444,8 +409,43 @@ describe("bundl", () => {
           .rpc();
       } catch (err: any) {
         failed = true;
-        // console.log(err)
+        // console.log(err);
         assert.equal(err.error.errorCode.code, "Unauthorized");
+      }
+
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
+    it("given amount more than amount per interval, it fails with `InvalidTotalAmount`", async () => {
+      let failed = false;
+      try {
+        const bundleIdentifier = 1;
+        await program.methods
+          .trigger(new BN(bundleIdentifier), [
+            new BN(200_000_000),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+          ])
+          .accounts({
+            authority: bundlKeypair.publicKey,
+            user: user,
+            mintAccount: mint,
+          })
+          .remainingAccounts([
+            {
+              pubkey: recipientTokenAccount0,
+              isWritable: true,
+              isSigner: false,
+            },
+          ])
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err);
+        assert.equal(err.error.errorCode.code, "InvalidTotalAmount");
       }
 
       assert.ok(failed, "Expected call to fail but it succeeded");
@@ -456,7 +456,7 @@ describe("bundl", () => {
       try {
         const bundleIdentifier = 1;
         await program.methods
-          .trigger(new BN(bundleIdentifier))
+          .trigger(new BN(bundleIdentifier), amountArray)
           .accounts({
             authority: bundlKeypair.publicKey,
             user: user,
@@ -466,7 +466,7 @@ describe("bundl", () => {
           .rpc();
       } catch (err: any) {
         failed = true;
-        // console.log(err)
+        // console.log(err);
         assert.equal(err.error.errorCode.code, "InvalidNumRecipientsProvided");
       }
       assert.ok(failed, "Expected call to fail but it succeeded");
@@ -484,7 +484,7 @@ describe("bundl", () => {
 
       const bundleIdentifier = 1;
       await program.methods
-        .trigger(new BN(bundleIdentifier))
+        .trigger(new BN(bundleIdentifier), amountArray)
         .accounts({
           authority: bundlKeypair.publicKey,
           user: user,
@@ -542,7 +542,7 @@ describe("bundl", () => {
       try {
         const bundleIdentifier = 1;
         await program.methods
-          .trigger(new BN(bundleIdentifier))
+          .trigger(new BN(bundleIdentifier), amountArray)
           .accounts({
             authority: bundlKeypair.publicKey,
             user: user,
@@ -592,7 +592,7 @@ describe("bundl", () => {
       );
 
       // fetch the bundle account to get ATAs manually because js only references the first index
-      const accountInfo = await provider.connection.getAccountInfo(bundlePda); 
+      const accountInfo = await provider.connection.getAccountInfo(bundlePda);
       // Skip the discriminator (8 bytes) + 4 u64/i64 fields (40 bytes)
       const offset = 8 + 8 + 8 + 8 + 8; // = 48
       const data = accountInfo.data.slice(offset);
@@ -604,7 +604,13 @@ describe("bundl", () => {
 
       const bundleIdentifier = 0;
       await program.methods
-        .trigger(new BN(bundleIdentifier))
+        .trigger(new BN(bundleIdentifier), [
+          new BN(20_000_000),
+          new BN(20_000_000),
+          new BN(20_000_000),
+          new BN(40_000_000),
+          new BN(0),
+        ])
         .accounts({
           authority: bundlKeypair.publicKey,
           user: user,
@@ -706,13 +712,7 @@ describe("bundl", () => {
 
       // Create a new bundle with 30s interval
       await program.methods
-        .addBundle(
-          amountPerInterval,
-          interval,
-          [recipientTokenAccount0],
-          [100],
-          1
-        )
+        .addBundle(amountPerInterval, interval, [recipientTokenAccount0], 1)
         .accounts({
           authority: bundlKeypair.publicKey,
           user: user,
@@ -722,7 +722,13 @@ describe("bundl", () => {
 
       // Trigger once — should succeed and set `last_paid`
       await program.methods
-        .trigger(new BN(bundleIdentifier))
+        .trigger(new BN(bundleIdentifier), [
+          new BN(100_000_000),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+        ])
         .accounts({
           authority: bundlKeypair.publicKey,
           user: user,
@@ -742,7 +748,13 @@ describe("bundl", () => {
       let failed = false;
       try {
         await program.methods
-          .trigger(new BN(bundleIdentifier))
+          .trigger(new BN(bundleIdentifier), [
+            new BN(100_000_000),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+          ])
           .accounts({
             authority: bundlKeypair.publicKey,
             user: user,
@@ -768,7 +780,13 @@ describe("bundl", () => {
 
       // Call trigger again — should now succeed
       await program.methods
-        .trigger(new BN(bundleIdentifier))
+        .trigger(new BN(bundleIdentifier), [
+          new BN(100_000_000),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+        ])
         .accounts({
           authority: bundlKeypair.publicKey,
           user: user,

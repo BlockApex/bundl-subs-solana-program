@@ -48,7 +48,6 @@ pub mod bundl {
     /// * `amount_per_interval` - The amount to be paid per interval
     /// * `interval` - The interval in seconds
     /// * `user_atas` - The associated token accounts of the recipients
-    /// * `percentages` - The percentages for each recipient
     /// * `num_recipients` - The number of recipients
     #[access_control(check_owner(&ctx.accounts.authority))]
     pub fn add_bundle(
@@ -56,22 +55,11 @@ pub mod bundl {
         amount_per_interval: u64,
         interval: u64,
         user_atas: [Pubkey; 5],
-        percentages: [u8; 5],
         num_recipients: u8,
     ) -> Result<()> {
         // assert valid num_recipients
         if num_recipients == 0 || num_recipients > 5 {
             return Err(error!(ErrorCode::InvalidNumRecipients));
-        }
-
-        // assert percentages sum to 100
-        let total_percentage: u8 = percentages.iter().take(num_recipients as usize).sum();
-        if total_percentage != 100 {
-            return Err(error!(ErrorCode::InvalidPercentages));
-        }
-
-        for i in 0..5 {
-            msg!("percentages[{}] = {}", i, percentages[i]);
         }
 
         // read from ctx
@@ -84,7 +72,6 @@ pub mod bundl {
         bundle.interval = interval as i64;
         bundle.last_paid = 0;
         bundle.user_atas = user_atas;
-        bundle.percentages = percentages;
         bundle.num_recipients = num_recipients;
 
         // increment bundle counter
@@ -97,10 +84,12 @@ pub mod bundl {
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
     /// * `_bundle_identifier` - The identifier of the bundle to trigger
+    /// * `amounts` - The amounts to be paid to each recipient
     #[access_control(check_owner(&ctx.accounts.authority))]
     pub fn trigger<'info>(
         ctx: Context<'_, '_, 'info, 'info, Trigger<'info>>,
         _bundle_identifier: u64,
+        amounts: [u64; 5],
     ) -> Result<()> {
         // read from ctx
         let bundle = &mut ctx.accounts.bundle;
@@ -121,16 +110,15 @@ pub mod bundl {
             return Err(error!(ErrorCode::IntervalNotPassed));
         }
 
+        // sum the amounts array
+        let total_amount: u64 = amounts.iter().take(bundle.num_recipients as usize).sum();
+
+        require_gte!(bundle.amount_per_interval, total_amount, ErrorCode::InvalidTotalAmount);
+
         // check if user has enough balance
-        if user_token_account.amount < bundle.amount_per_interval {
+        if user_token_account.amount < total_amount {
             return Err(error!(ErrorCode::InsufficientFunds));
         }
-
-        let split_amounts = split_amounts(
-            bundle.percentages,
-            bundle.num_recipients,
-            bundle.amount_per_interval,
-        );
 
         // print split amounts for debugging
         for i in 0..bundle.num_recipients {
@@ -140,7 +128,7 @@ pub mod bundl {
 
             msg!(
                 "Transferring {} to recipient {}",
-                split_amounts[i as usize],
+                amounts[i as usize],
                 recipient_info.key()
             );
 
@@ -160,7 +148,7 @@ pub mod bundl {
                     controller.user.as_ref(),
                     &[controller.bump],
                 ]]),
-                split_amounts[i as usize],
+                amounts[i as usize],
             )?;
         }
 
@@ -169,20 +157,6 @@ pub mod bundl {
 
         Ok(())
     }
-}
-
-fn split_amounts(percentages: [u8; 5], num_recipients: u8, total_amount: u64) -> [u64; 5] {
-    let mut amounts = [0u64; 5];
-    let mut allocated = 0u64;
-
-    for i in 0..num_recipients {
-        amounts[i as usize] = (total_amount * percentages[i as usize] as u64) / 100;
-        allocated += amounts[i as usize];
-    }
-
-    // TODO: handle rounding issues more gracefully
-
-    amounts
 }
 
 fn check_owner(authority: &Signer) -> Result<()> {
