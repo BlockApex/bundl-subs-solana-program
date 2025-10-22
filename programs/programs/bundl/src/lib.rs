@@ -39,6 +39,8 @@ pub mod bundl {
         controller.user_token_account = user_token_account.key();
         controller.bump = ctx.bumps.controller;
 
+        msg!("Controller {} initialized for user {}", controller.key(), controller.user);
+
         Ok(())
     }
 
@@ -76,6 +78,8 @@ pub mod bundl {
 
         // increment bundle counter
         controller.bundle_counter += 1;
+
+        msg!("Bundle {} added successfully with identifier {}", bundle.key(), bundle.bundle_identifier);
 
         Ok(())
     }
@@ -154,6 +158,9 @@ pub mod bundl {
 
         // update last paid time
         bundle.last_paid = current_time;
+
+        // log
+        msg!("Bundle {} triggered with identifier {}", bundle.key(), bundle.bundle_identifier);
 
         Ok(())
     }
