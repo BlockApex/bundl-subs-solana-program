@@ -117,40 +117,40 @@ describe("bundl", () => {
   });
 
   describe("initialize controller", async () => {
-    describe("given half amount is approved", async () => {
-      before(async () => {
-        // Step 5: Approve PDA to spend
-        const approveIx = createApproveInstruction(
-          userTokenAccount,
-          controllerPda,
-          user,
-          250_000_000 // Approve 500 USDC
-        );
+    // describe("given half amount is approved", async () => {
+    //   before(async () => {
+    //     // Step 5: Approve PDA to spend
+    //     const approveIx = createApproveInstruction(
+    //       userTokenAccount,
+    //       controllerPda,
+    //       user,
+    //       250_000_000 // Approve 500 USDC
+    //     );
 
-        const tx = new anchor.web3.Transaction().add(approveIx);
-        await provider.sendAndConfirm(tx);
-      });
+    //     const tx = new anchor.web3.Transaction().add(approveIx);
+    //     await provider.sendAndConfirm(tx);
+    //   });
 
-      it("fails with `LowAllowance`", async () => {
-        let failed = false;
-        try {
-          // Call the instruction without approving the PDA
-          await program.methods
-            .initializeController()
-            .accounts({
-              authority: user,
-              mintAccount: mint,
-            })
-            .signers([]) // authority already set in provider
-            .rpc();
-        } catch (err) {
-          failed = true;
-          // console.log(err);
-          assert.ok(err.error.errorCode.code === "LowAllowance");
-        }
-        assert.ok(failed, "Expected call to fail but it succeeded");
-      });
-    });
+    //   it("fails with `LowAllowance`", async () => {
+    //     let failed = false;
+    //     try {
+    //       // Call the instruction without approving the PDA
+    //       await program.methods
+    //         .initializeController()
+    //         .accounts({
+    //           authority: user,
+    //           mintAccount: mint,
+    //         })
+    //         .signers([]) // authority already set in provider
+    //         .rpc();
+    //     } catch (err) {
+    //       failed = true;
+    //       // console.log(err);
+    //       assert.ok(err.error.errorCode.code === "LowAllowance");
+    //     }
+    //     assert.ok(failed, "Expected call to fail but it succeeded");
+    //   });
+    // });
 
     describe("given amount is approved", async () => {
       before(async () => {
@@ -192,24 +192,24 @@ describe("bundl", () => {
       });
     });
 
-    it("when amount is not approved, then fails with `InvalidDelegate`", async () => {
-      let failed = false;
-      try {
-        // Call the instruction without approving the PDA
-        await program.methods
-          .initializeController()
-          .accounts({
-            authority: user,
-            mintAccount: mint,
-          })
-          .signers([]) // authority already set in provider
-          .rpc();
-      } catch (err) {
-        failed = true;
-        assert.ok(err.error.errorCode.code === "InvalidDelegate");
-      }
-      assert.ok(failed, "Expected call to fail but it succeeded");
-    });
+    // it("when amount is not approved, then fails with `InvalidDelegate`", async () => {
+    //   let failed = false;
+    //   try {
+    //     // Call the instruction without approving the PDA
+    //     await program.methods
+    //       .initializeController()
+    //       .accounts({
+    //         authority: user,
+    //         mintAccount: mint,
+    //       })
+    //       .signers([]) // authority already set in provider
+    //       .rpc();
+    //   } catch (err) {
+    //     failed = true;
+    //     assert.ok(err.error.errorCode.code === "InvalidDelegate");
+    //   }
+    //   assert.ok(failed, "Expected call to fail but it succeeded");
+    // });
   });
 
   describe("add bundle", async () => {

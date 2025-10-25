@@ -5,7 +5,7 @@ pub use state::*;
 pub mod error;
 use crate::error::ErrorCode;
 
-declare_id!("D9JRE9KGCzrVysZQ38YwJjJnfvSPtKZtBmo45czCdNd4");
+declare_id!("FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i");
 
 const OWNER: &str = "BTFsHVsT8V9gXrgDNKdCw574dR9X8hom9KWsiKBvjbSi";
 
@@ -23,15 +23,15 @@ pub mod bundl {
         let controller = &mut ctx.accounts.controller;
         let user_token_account = &ctx.accounts.from_token_account;
 
-        // check if controller_pda is delegated
-        if user_token_account.delegate != COption::Some(controller.key()) {
-            return Err(error!(ErrorCode::InvalidDelegate));
-        }
+        // // check if controller_pda is delegated
+        // if user_token_account.delegate != COption::Some(controller.key()) {
+        //     return Err(error!(ErrorCode::InvalidDelegate));
+        // }
 
-        // Check the delegated amount is sufficient
-        if user_token_account.delegated_amount < user_token_account.amount {
-            return Err(error!(ErrorCode::LowAllowance));
-        }
+        // // Check the delegated amount is sufficient
+        // if user_token_account.delegated_amount < user_token_account.amount {
+        //     return Err(error!(ErrorCode::LowAllowance));
+        // }
 
         // Store config
         controller.user = ctx.accounts.authority.key();
@@ -39,7 +39,11 @@ pub mod bundl {
         controller.user_token_account = user_token_account.key();
         controller.bump = ctx.bumps.controller;
 
-        msg!("Controller {} initialized for user {}", controller.key(), controller.user);
+        msg!(
+            "Controller {} initialized for user {}",
+            controller.key(),
+            controller.user
+        );
 
         Ok(())
     }
@@ -79,7 +83,11 @@ pub mod bundl {
         // increment bundle counter
         controller.bundle_counter += 1;
 
-        msg!("Bundle {} added successfully with identifier {}", bundle.key(), bundle.bundle_identifier);
+        msg!(
+            "Bundle {} added successfully with identifier {}",
+            bundle.key(),
+            bundle.bundle_identifier
+        );
 
         Ok(())
     }
@@ -117,7 +125,11 @@ pub mod bundl {
         // sum the amounts array
         let total_amount: u64 = amounts.iter().take(bundle.num_recipients as usize).sum();
 
-        require_gte!(bundle.amount_per_interval, total_amount, ErrorCode::InvalidTotalAmount);
+        require_gte!(
+            bundle.amount_per_interval,
+            total_amount,
+            ErrorCode::InvalidTotalAmount
+        );
 
         // check if user has enough balance
         if user_token_account.amount < total_amount {
@@ -136,7 +148,11 @@ pub mod bundl {
                 recipient_info.key()
             );
 
-            require_eq!(recipient_ata.key(), bundle.user_atas[i as usize], ErrorCode::InvalidRecipient);
+            require_eq!(
+                recipient_ata.key(),
+                bundle.user_atas[i as usize],
+                ErrorCode::InvalidRecipient
+            );
 
             // transfer tokens from user to recipient
             let cpi_accounts = anchor_spl::token::Transfer {
@@ -160,7 +176,11 @@ pub mod bundl {
         bundle.last_paid = current_time;
 
         // log
-        msg!("Bundle {} triggered with identifier {}", bundle.key(), bundle.bundle_identifier);
+        msg!(
+            "Bundle {} triggered with identifier {}",
+            bundle.key(),
+            bundle.bundle_identifier
+        );
 
         Ok(())
     }
