@@ -1,4 +1,3 @@
-use crate::program_option::COption;
 use anchor_lang::prelude::*;
 pub mod state;
 pub use state::*;
@@ -18,7 +17,13 @@ pub mod bundl {
     /// Initializes the user bundl subscription controller account
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
-    pub fn initialize_controller(ctx: Context<InitializeController>) -> Result<()> {
+    pub fn initialize_controller(
+        ctx: Context<InitializeController>,
+        _bundle_id: [u8; 12],
+    ) -> Result<()> {
+        msg!("Adding bundle with identifier {:?}", _bundle_id);
+        let seed = hex::decode("68fe0143fa35862d934ae947");
+        msg!("SEED BYTES: {:#?}", seed);
         // read from ctx
         let controller = &mut ctx.accounts.controller;
         let user_token_account = &ctx.accounts.from_token_account;
@@ -35,7 +40,6 @@ pub mod bundl {
 
         // Store config
         controller.user = ctx.accounts.authority.key();
-        controller.bundle_counter = 0;
         controller.user_token_account = user_token_account.key();
         controller.bump = ctx.bumps.controller;
 
@@ -55,9 +59,11 @@ pub mod bundl {
     /// * `interval` - The interval in seconds
     /// * `user_atas` - The associated token accounts of the recipients
     /// * `num_recipients` - The number of recipients
+    /// * `bundle_seed` - The 16-byte Keccak256 hash of the bundle identifier
     #[access_control(check_owner(&ctx.accounts.authority))]
     pub fn add_bundle(
         ctx: Context<AddBundle>,
+        bundle_seed: [u8; 16],
         amount_per_interval: u64,
         interval: u64,
         user_atas: [Pubkey; 5],
@@ -69,25 +75,22 @@ pub mod bundl {
         }
 
         // read from ctx
-        let controller = &mut ctx.accounts.controller;
         let bundle = &mut ctx.accounts.bundle;
 
         // store config
-        bundle.bundle_identifier = controller.bundle_counter;
         bundle.amount_per_interval = amount_per_interval;
         bundle.interval = interval as i64;
         bundle.last_paid = 0;
         bundle.user_atas = user_atas;
         bundle.num_recipients = num_recipients;
 
-        // increment bundle counter
-        controller.bundle_counter += 1;
-
         msg!(
-            "Bundle {} added successfully with identifier {}",
+            "Bundle {} added successfully with seed {:?}",
             bundle.key(),
-            bundle.bundle_identifier
+            bundle_seed
         );
+
+        msg!("Controller key: {}", ctx.accounts.controller.key());
 
         Ok(())
     }
@@ -95,12 +98,12 @@ pub mod bundl {
     /// Triggers a payment for the specified bundle if the interval has passed
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
-    /// * `_bundle_identifier` - The identifier of the bundle to trigger
+    /// * `bundle_seed` - The identifier of the bundle to trigger
     /// * `amounts` - The amounts to be paid to each recipient
     #[access_control(check_owner(&ctx.accounts.authority))]
     pub fn trigger<'info>(
         ctx: Context<'_, '_, 'info, 'info, Trigger<'info>>,
-        _bundle_identifier: u64,
+        bundle_seed: [u8; 16],
         amounts: [u64; 5],
     ) -> Result<()> {
         // read from ctx
@@ -177,9 +180,9 @@ pub mod bundl {
 
         // log
         msg!(
-            "Bundle {} triggered with identifier {}",
+            "Bundle {} triggered with seed {:?}",
             bundle.key(),
-            bundle.bundle_identifier
+            bundle_seed
         );
 
         Ok(())

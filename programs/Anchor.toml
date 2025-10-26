@@ -15,7 +15,7 @@ bundl = "FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

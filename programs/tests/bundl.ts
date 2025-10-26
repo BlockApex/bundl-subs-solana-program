@@ -10,6 +10,7 @@ import {
 import { BN } from "bn.js";
 import { assert } from "chai";
 import * as dotenv from "dotenv";
+import { keccak256 } from "js-sha3";
 import { Bundl } from "../target/types/bundl";
 
 dotenv.config();
@@ -169,7 +170,9 @@ describe("bundl", () => {
       it("Initializes a controller account", async () => {
         // Call the initialize_controller instruction
         await program.methods
-          .initializeController()
+          .initializeController(
+            Array.from(Buffer.from("68fe0143fa35862d934ae947", "hex"))
+          )
           .accounts({
             authority: user,
             mintAccount: mint,
@@ -187,7 +190,6 @@ describe("bundl", () => {
         // Check controller values
         assert.ok(controllerAccount.user.equals(user));
         assert.ok(controllerAccount.userTokenAccount.equals(userTokenAccount));
-        assert.ok(controllerAccount.bundleCounter.toNumber() == 0);
         assert.ok(controllerAccount.bump === controllerBump);
       });
     });
@@ -238,19 +240,32 @@ describe("bundl", () => {
     it("given incorrect authority, then fails with `Unauthorized`", async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
+      const bundleId = "test-unauthorized-bundle";
+
+      // Hash the bundle ID with Keccak256 and take first 16 bytes
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
       let failed = false;
       try {
         // Call the add_bundle instruction
         await program.methods
           .addBundle(
+            Array.from(seed16), // Convert to array
             new BN(amountPerInterval),
             new BN(interval),
-            [recipientTokenAccount0],
+            [
+              recipientTokenAccount0,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+            ],
             1
           )
           .accounts({
-            user: user,
-            authority: user, // incorrect authority
+            user,
+            authority: user, // incorrect authority (should be bundlKeypair)
           })
           .signers([])
           .rpc();
@@ -266,16 +281,28 @@ describe("bundl", () => {
     it("given more than 5 recipients, then fails with `InvalidNumRecipients`", async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
+      const bundleId = "test-too-many-recipients";
+
+      // Hash the bundle ID with Keccak256 and take first 16 bytes
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
 
       let failed = false;
       try {
         // Call the add_bundle instruction
         await program.methods
           .addBundle(
+            Array.from(seed16),
             new BN(amountPerInterval),
             new BN(interval),
-            [recipientTokenAccount0],
-            6
+            [
+              recipientTokenAccount0,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+            ],
+            6 // More than 5 recipients
           )
           .accounts({
             user: user,
@@ -295,16 +322,28 @@ describe("bundl", () => {
     it("given 0 recipients, then fails with `InvalidNumRecipients`", async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
+      const bundleId = "test-zero-recipients";
+
+      // Hash the bundle ID with Keccak256 and take first 16 bytes
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
 
       let failed = false;
       try {
         // Call the add_bundle instruction
         await program.methods
           .addBundle(
+            Array.from(seed16),
             new BN(amountPerInterval),
             new BN(interval),
-            [recipientTokenAccount0],
-            0
+            [
+              recipientTokenAccount0,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+            ],
+            0 // Zero recipients
           )
           .accounts({
             user: user,
@@ -324,55 +363,55 @@ describe("bundl", () => {
     it("Adds a bundle", async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
-      const seed = Buffer.alloc(8);
-      seed.writeBigUInt64LE(BigInt(0));
+      const bundleId = "68fe0143fa35862d934ae947";
 
-      // get sol amount of user
-      const userBalanceBefore = await provider.connection.getBalance(user);
-      // get sol amount of bundl authority
-      const bundlBalanceBefore = await provider.connection.getBalance(bundlKeypair.publicKey);
+      // Hash the bundle ID string with Keccak256 and take first 16 bytes
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
 
-      // Call the add_bundle instruction
-      await program.methods
-        .addBundle(
-          new BN(amountPerInterval),
-          new BN(interval),
-          [
-            recipientTokenAccount0,
-            recipientTokenAccount1,
-            recipientTokenAccount2,
-            recipientTokenAccount3,
-          ],
-          4
-        )
-        .accounts({
-          user: user,
-          authority: bundlKeypair.publicKey,
-        })
-        .signers([bundlKeypair])
-        .rpc();
-
-      const result = await anchor.web3.PublicKey.findProgramAddressSync(
-        [seed, controllerPda.toBuffer()],
+      // Derive bundle PDA
+      [bundlePda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [seed16, controllerPda.toBuffer()],
         program.programId
       );
-      bundlePda = result[0];
-      bundleBump = result[1];
 
-      // fetch the controller account to check bundle counter increment
-      const controllerAccount =
-        await program.account.userBundlSubscriptionController.fetch(
-          controllerPda
-        );
+      // get sol amount of user before
+      const userBalanceBefore = await provider.connection.getBalance(user);
+      // get sol amount of bundl authority before
+      const bundlBalanceBefore = await provider.connection.getBalance(
+        bundlKeypair.publicKey
+      );
+
+      try {
+        // Call the add_bundle instruction
+        await program.methods
+          .addBundle(
+            Array.from(seed16), // Convert Buffer to array
+            new BN(amountPerInterval),
+            new BN(interval),
+            [
+              recipientTokenAccount0,
+              recipientTokenAccount1,
+              recipientTokenAccount2,
+              recipientTokenAccount3,
+              anchor.web3.PublicKey.default, // 5th recipient
+            ],
+            4
+          )
+          .accounts({
+            user,
+            authority: bundlKeypair.publicKey,
+          })
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (error) {
+        throw error;
+      }
 
       // Fetch the bundle account
       const bundleAccount = await program.account.bundle.fetch(bundlePda);
 
-      // Check controller values
-      assert.ok(controllerAccount.bundleCounter.toNumber() == 1);
-
       // Check bundle values
-      assert.ok(bundleAccount.bundleIdentifier.toNumber() == 0);
       assert.ok(
         bundleAccount.amountPerInterval.toNumber() == amountPerInterval
       );
@@ -390,10 +429,15 @@ describe("bundl", () => {
       // get sol amount of user after
       const userBalanceAfter = await provider.connection.getBalance(user);
       // get sol amount of bundl authority after
-      const bundlBalanceAfter = await provider.connection.getBalance(bundlKeypair.publicKey);
+      const bundlBalanceAfter = await provider.connection.getBalance(
+        bundlKeypair.publicKey
+      );
 
       // bundl authority balance after should be more to indicate it received rent
-      assert.ok(bundlBalanceAfter == bundlBalanceBefore, "bundl did not receive rent");
+      assert.ok(
+        bundlBalanceAfter == bundlBalanceBefore,
+        "bundl did not receive rent"
+      );
 
       // sol amount after should be less to indicate user paid rent
       assert.ok(userBalanceAfter < userBalanceBefore, "user did not pay rent");
@@ -411,13 +455,23 @@ describe("bundl", () => {
     before(async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
 
       // Call the add_bundle instruction
       await program.methods
         .addBundle(
+          Array.from(seed16),
           new BN(amountPerInterval),
           new BN(interval),
-          [recipientTokenAccount0],
+          [
+            recipientTokenAccount0,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+          ],
           1
         )
         .accounts({
@@ -429,22 +483,21 @@ describe("bundl", () => {
 
       bundlePda1 = (
         await anchor.web3.PublicKey.findProgramAddressSync(
-          [
-            Buffer.from(Uint8Array.of(...new BN(1).toArray("le", 8))),
-            controllerPda.toBuffer(),
-          ],
+          [seed16, controllerPda.toBuffer()],
           program.programId
         )
       )[0];
     });
 
     it("given incorrect authority, it fails with `Unauthorized`", async () => {
-      const bundleIdentifier = 0;
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
 
       let failed = false;
       try {
         await program.methods
-          .trigger(new BN(bundleIdentifier), amountArray)
+          .trigger(Array.from(seed16), amountArray)
           .accounts({
             authority: user,
             user: user,
@@ -463,9 +516,12 @@ describe("bundl", () => {
     it("given amount more than amount per interval, it fails with `InvalidTotalAmount`", async () => {
       let failed = false;
       try {
-        const bundleIdentifier = 1;
+        const bundleId = "bundle-trigger-1";
+        const hash = keccak256(bundleId);
+        const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
         await program.methods
-          .trigger(new BN(bundleIdentifier), [
+          .trigger(Array.from(seed16), [
             new BN(200_000_000),
             new BN(0),
             new BN(0),
@@ -498,9 +554,12 @@ describe("bundl", () => {
     it("given invalid number of recipients provided, it fails with `InvalidNumRecipientsProvided`", async () => {
       let failed = false;
       try {
-        const bundleIdentifier = 1;
+        const bundleId = "bundle-trigger-1";
+        const hash = keccak256(bundleId);
+        const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
         await program.methods
-          .trigger(new BN(bundleIdentifier), amountArray)
+          .trigger(Array.from(seed16), amountArray)
           .accounts({
             authority: bundlKeypair.publicKey,
             user: user,
@@ -519,9 +578,12 @@ describe("bundl", () => {
     it("given invalid recipient, it fails with `InvalidRecipient`", async () => {
       let failed = false;
       try {
-        const bundleIdentifier = 1;
+        const bundleId = "bundle-trigger-1";
+        const hash = keccak256(bundleId);
+        const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
         await program.methods
-          .trigger(new BN(bundleIdentifier), amountArray)
+          .trigger(Array.from(seed16), amountArray)
           .accounts({
             authority: bundlKeypair.publicKey,
             user: user,
@@ -564,9 +626,12 @@ describe("bundl", () => {
       // Now attempt to trigger with an amount that exceeds remaining balance
       let failed = false;
       try {
-        const bundleIdentifier = 1; // bundle 2 has 1 recipient
+        const bundleId = "bundle-trigger-1";
+        const hash = keccak256(bundleId);
+        const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
         await program.methods
-          .trigger(new BN(bundleIdentifier), [
+          .trigger(Array.from(seed16), [
             new BN(200),
             new BN(0),
             new BN(0),
@@ -625,9 +690,12 @@ describe("bundl", () => {
         userTokenAccount
       );
 
-      const bundleIdentifier = 1;
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
       await program.methods
-        .trigger(new BN(bundleIdentifier), amountArray)
+        .trigger(Array.from(seed16), amountArray)
         .accounts({
           authority: bundlKeypair.publicKey,
           user: user,
@@ -683,9 +751,12 @@ describe("bundl", () => {
     it("given time has not elapsed, it fails with `IntervalNotPassed`", async () => {
       let failed = false;
       try {
-        const bundleIdentifier = 1;
+        const bundleId = "bundle-trigger-1";
+        const hash = keccak256(bundleId);
+        const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
         await program.methods
-          .trigger(new BN(bundleIdentifier), amountArray)
+          .trigger(Array.from(seed16), amountArray)
           .accounts({
             authority: bundlKeypair.publicKey,
             user: user,
@@ -709,6 +780,11 @@ describe("bundl", () => {
     });
 
     it("given multiple splits, it triggers a bundle payment to multiple recipients", async () => {
+
+      const bundleId = "68fe0143fa35862d934ae947";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
       // fetch bundle account to check last paid update
       const bundleAccount = await program.account.bundle.fetch(bundlePda1);
 
@@ -737,7 +813,7 @@ describe("bundl", () => {
       // fetch the bundle account to get ATAs manually because js only references the first index
       const accountInfo = await provider.connection.getAccountInfo(bundlePda);
       // Skip the discriminator (8 bytes) + 4 u64/i64 fields (40 bytes)
-      const offset = 8 + 8 + 8 + 8 + 8; // = 48
+      const offset = 8 + 8 + 8 + 8; // = 48
       const data = accountInfo.data.slice(offset);
       const atas = [];
       for (let i = 0; i < 5; i++) {
@@ -745,9 +821,9 @@ describe("bundl", () => {
       }
       // console.log(atas.map((x) => x.toBase58()));
 
-      const bundleIdentifier = 0;
       await program.methods
-        .trigger(new BN(bundleIdentifier), [
+        .trigger(
+          Array.from(seed16), [
           new BN(20_000_000),
           new BN(20_000_000),
           new BN(20_000_000),
@@ -851,11 +927,27 @@ describe("bundl", () => {
     it("respects the interval — fails before 30s, succeeds after", async () => {
       const amountPerInterval = new BN(100_000_000); // 100 USDC
       const interval = new BN(30); // 30 seconds
-      const bundleIdentifier = 2; // new bundle
+      const bundleId = "interval-test-bundle"; // unique bundle ID
+
+      // Hash the bundle ID
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
 
       // Create a new bundle with 30s interval
       await program.methods
-        .addBundle(amountPerInterval, interval, [recipientTokenAccount0], 1)
+        .addBundle(
+          Array.from(seed16),
+          amountPerInterval,
+          interval,
+          [
+            recipientTokenAccount0,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+          ],
+          1
+        )
         .accounts({
           authority: bundlKeypair.publicKey,
           user: user,
@@ -865,7 +957,7 @@ describe("bundl", () => {
 
       // Trigger once — should succeed and set `last_paid`
       await program.methods
-        .trigger(new BN(bundleIdentifier), [
+        .trigger(Array.from(seed16), [
           new BN(100_000_000),
           new BN(0),
           new BN(0),
@@ -891,7 +983,7 @@ describe("bundl", () => {
       let failed = false;
       try {
         await program.methods
-          .trigger(new BN(bundleIdentifier), [
+          .trigger(Array.from(seed16), [
             new BN(100_000_000),
             new BN(0),
             new BN(0),
@@ -923,7 +1015,7 @@ describe("bundl", () => {
 
       // Call trigger again — should now succeed
       await program.methods
-        .trigger(new BN(bundleIdentifier), [
+        .trigger(Array.from(seed16), [
           new BN(100_000_000),
           new BN(0),
           new BN(0),

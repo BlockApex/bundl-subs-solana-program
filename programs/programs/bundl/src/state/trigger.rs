@@ -3,7 +3,7 @@ use crate::{Bundle, UserBundlSubscriptionController};
 use anchor_spl::token::{Token, TokenAccount, Mint};
 
 #[derive(Accounts)]
-#[instruction(_bundle_identifier: u64)]
+#[instruction(bundle_seed: [u8; 16])]
 pub struct Trigger<'info> {
     #[account(
         mut,
@@ -14,7 +14,7 @@ pub struct Trigger<'info> {
 
     #[account(
         mut,
-        seeds = [_bundle_identifier.to_le_bytes().as_ref(), controller.key().as_ref()], 
+        seeds = [bundle_seed.as_ref(), controller.key().as_ref()], 
         bump
     )]
     pub bundle: Account<'info, Bundle>,

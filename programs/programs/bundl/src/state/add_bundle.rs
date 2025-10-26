@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use crate::{Bundle, UserBundlSubscriptionController};
 
 #[derive(Accounts)]
+#[instruction(bundle_seed: [u8; 16])]
 pub struct AddBundle<'info> {
     #[account(
         mut,
@@ -14,7 +15,10 @@ pub struct AddBundle<'info> {
         init, 
         payer = user, 
         space = 8 + Bundle::INIT_SPACE, 
-        seeds = [controller.bundle_counter.to_le_bytes().as_ref(), controller.key().as_ref()], 
+        seeds = [
+            bundle_seed.as_ref(),
+            controller.key().as_ref()
+        ],
         bump
     )]
     pub bundle: Account<'info, Bundle>,
