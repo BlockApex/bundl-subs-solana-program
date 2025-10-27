@@ -19,11 +19,7 @@ pub mod bundl {
     /// * `ctx` - The context containing the accounts involved in the transaction
     pub fn initialize_controller(
         ctx: Context<InitializeController>,
-        _bundle_id: [u8; 12],
     ) -> Result<()> {
-        msg!("Adding bundle with identifier {:?}", _bundle_id);
-        let seed = hex::decode("68fe0143fa35862d934ae947");
-        msg!("SEED BYTES: {:#?}", seed);
         // read from ctx
         let controller = &mut ctx.accounts.controller;
         let user_token_account = &ctx.accounts.from_token_account;

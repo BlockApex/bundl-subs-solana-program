@@ -170,9 +170,7 @@ describe("bundl", () => {
       it("Initializes a controller account", async () => {
         // Call the initialize_controller instruction
         await program.methods
-          .initializeController(
-            Array.from(Buffer.from("68fe0143fa35862d934ae947", "hex"))
-          )
+          .initializeController()
           .accounts({
             authority: user,
             mintAccount: mint,
