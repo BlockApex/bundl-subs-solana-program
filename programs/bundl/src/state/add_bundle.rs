@@ -5,19 +5,12 @@ use crate::{Bundle, UserBundlSubscriptionController};
 #[instruction(bundle_seed: [u8; 16])]
 pub struct AddBundle<'info> {
     #[account(
-        mut,
-        seeds = [b"controller", user.key().as_ref()],
-        bump = controller.bump,
-    )]
-    pub controller: Account<'info, UserBundlSubscriptionController>,
-
-    #[account(
         init_if_needed, 
         payer = user, 
         space = 8 + Bundle::INIT_SPACE, 
         seeds = [
             bundle_seed.as_ref(),
-            controller.key().as_ref()
+            user.key().as_ref()
         ],
         bump
     )]

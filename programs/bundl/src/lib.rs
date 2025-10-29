@@ -24,16 +24,6 @@ pub mod bundl {
         let controller = &mut ctx.accounts.controller;
         let user_token_account = &ctx.accounts.from_token_account;
 
-        // // check if controller_pda is delegated
-        // if user_token_account.delegate != COption::Some(controller.key()) {
-        //     return Err(error!(ErrorCode::InvalidDelegate));
-        // }
-
-        // // Check the delegated amount is sufficient
-        // if user_token_account.delegated_amount < user_token_account.amount {
-        //     return Err(error!(ErrorCode::LowAllowance));
-        // }
-
         // Store config
         controller.user = ctx.accounts.authority.key();
         controller.user_token_account = user_token_account.key();
@@ -48,7 +38,7 @@ pub mod bundl {
         Ok(())
     }
 
-    /// Adds a new bundle to the user's subscription controller
+    /// Adds a new bundle to the user's address
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
     /// * `amount_per_interval` - The amount to be paid per interval
@@ -86,103 +76,101 @@ pub mod bundl {
             bundle_seed
         );
 
-        msg!("Controller key: {}", ctx.accounts.controller.key());
-
         Ok(())
     }
 
-    /// Triggers a payment for the specified bundle if the interval has passed
-    /// # Arguments
-    /// * `ctx` - The context containing the accounts involved in the transaction
-    /// * `bundle_seed` - The identifier of the bundle to trigger
-    /// * `amounts` - The amounts to be paid to each recipient
-    #[access_control(check_owner(&ctx.accounts.authority))]
-    pub fn trigger<'info>(
-        ctx: Context<'_, '_, 'info, 'info, Trigger<'info>>,
-        bundle_seed: [u8; 16],
-        amounts: [u64; 5],
-    ) -> Result<()> {
-        // read from ctx
-        let bundle = &mut ctx.accounts.bundle;
-        let controller = &ctx.accounts.controller;
-        let user_token_account = &ctx.accounts.user_token_account;
-        let remaining_accounts = ctx.remaining_accounts;
+    // / Triggers a payment for the specified bundle if the interval has passed
+    // / # Arguments
+    // / * `ctx` - The context containing the accounts involved in the transaction
+    // / * `bundle_seed` - The identifier of the bundle to trigger
+    // / * `amounts` - The amounts to be paid to each recipient
+    // #[access_control(check_owner(&ctx.accounts.authority))]
+    // pub fn trigger<'info>(
+    //     ctx: Context<'_, '_, 'info, 'info, Trigger<'info>>,
+    //     bundle_seed: [u8; 16],
+    //     amounts: [u64; 5],
+    // ) -> Result<()> {
+    //     // read from ctx
+    //     let bundle = &mut ctx.accounts.bundle;
+    //     let controller = &ctx.accounts.controller;
+    //     let user_token_account = &ctx.accounts.user_token_account;
+    //     let remaining_accounts = ctx.remaining_accounts;
 
-        require_eq!(
-            remaining_accounts.len(),
-            bundle.num_recipients as usize,
-            ErrorCode::InvalidNumRecipientsProvided
-        );
+    //     require_eq!(
+    //         remaining_accounts.len(),
+    //         bundle.num_recipients as usize,
+    //         ErrorCode::InvalidNumRecipientsProvided
+    //     );
 
-        // check if enough time has passed since last payment
-        let clock = Clock::get()?;
-        let current_time = clock.unix_timestamp;
-        if bundle.last_paid != 0 && current_time - bundle.last_paid < bundle.interval {
-            return Err(error!(ErrorCode::IntervalNotPassed));
-        }
+    //     // check if enough time has passed since last payment
+    //     let clock = Clock::get()?;
+    //     let current_time = clock.unix_timestamp;
+    //     if bundle.last_paid != 0 && current_time - bundle.last_paid < bundle.interval {
+    //         return Err(error!(ErrorCode::IntervalNotPassed));
+    //     }
 
-        // sum the amounts array
-        let total_amount: u64 = amounts.iter().take(bundle.num_recipients as usize).sum();
+    //     // sum the amounts array
+    //     let total_amount: u64 = amounts.iter().take(bundle.num_recipients as usize).sum();
 
-        require_gte!(
-            bundle.amount_per_interval,
-            total_amount,
-            ErrorCode::InvalidTotalAmount
-        );
+    //     require_gte!(
+    //         bundle.amount_per_interval,
+    //         total_amount,
+    //         ErrorCode::InvalidTotalAmount
+    //     );
 
-        // check if user has enough balance
-        if user_token_account.amount < total_amount {
-            return Err(error!(ErrorCode::InsufficientFunds));
-        }
+    //     // check if user has enough balance
+    //     if user_token_account.amount < total_amount {
+    //         return Err(error!(ErrorCode::InsufficientFunds));
+    //     }
 
-        // print split amounts for debugging
-        for i in 0..bundle.num_recipients {
-            // Borrow instead of clone so we pass &AccountInfo
-            let recipient_info = &remaining_accounts[i as usize];
-            let recipient_ata = Account::<TokenAccount>::try_from(recipient_info)?;
+    //     // print split amounts for debugging
+    //     for i in 0..bundle.num_recipients {
+    //         // Borrow instead of clone so we pass &AccountInfo
+    //         let recipient_info = &remaining_accounts[i as usize];
+    //         let recipient_ata = Account::<TokenAccount>::try_from(recipient_info)?;
 
-            msg!(
-                "Transferring {} to recipient {}",
-                amounts[i as usize],
-                recipient_info.key()
-            );
+    //         msg!(
+    //             "Transferring {} to recipient {}",
+    //             amounts[i as usize],
+    //             recipient_info.key()
+    //         );
 
-            require_eq!(
-                recipient_ata.key(),
-                bundle.user_atas[i as usize],
-                ErrorCode::InvalidRecipient
-            );
+    //         require_eq!(
+    //             recipient_ata.key(),
+    //             bundle.user_atas[i as usize],
+    //             ErrorCode::InvalidRecipient
+    //         );
 
-            // transfer tokens from user to recipient
-            let cpi_accounts = anchor_spl::token::Transfer {
-                from: user_token_account.to_account_info(),
-                to: recipient_ata.to_account_info(),
-                authority: controller.to_account_info(),
-            };
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-            anchor_spl::token::transfer(
-                cpi_ctx.with_signer(&[&[
-                    b"controller",
-                    controller.user.as_ref(),
-                    &[controller.bump],
-                ]]),
-                amounts[i as usize],
-            )?;
-        }
+    //         // transfer tokens from user to recipient
+    //         let cpi_accounts = anchor_spl::token::Transfer {
+    //             from: user_token_account.to_account_info(),
+    //             to: recipient_ata.to_account_info(),
+    //             authority: controller.to_account_info(),
+    //         };
+    //         let cpi_program = ctx.accounts.token_program.to_account_info();
+    //         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+    //         anchor_spl::token::transfer(
+    //             cpi_ctx.with_signer(&[&[
+    //                 b"controller",
+    //                 controller.user.as_ref(),
+    //                 &[controller.bump],
+    //             ]]),
+    //             amounts[i as usize],
+    //         )?;
+    //     }
 
-        // update last paid time
-        bundle.last_paid = current_time;
+    //     // update last paid time
+    //     bundle.last_paid = current_time;
 
-        // log
-        msg!(
-            "Bundle {} triggered with seed {:?}",
-            bundle.key(),
-            bundle_seed
-        );
+    //     // log
+    //     msg!(
+    //         "Bundle {} triggered with seed {:?}",
+    //         bundle.key(),
+    //         bundle_seed
+    //     );
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }
 
 fn check_owner(authority: &Signer) -> Result<()> {
