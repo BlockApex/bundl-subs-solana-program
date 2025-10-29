@@ -66,9 +66,10 @@ pub mod bundl {
         // store config
         bundle.amount_per_interval = amount_per_interval;
         bundle.interval = interval as i64;
-        bundle.last_paid = 0;
         bundle.user_atas = user_atas;
         bundle.num_recipients = num_recipients;
+        bundle.subs = 0;
+        bundle.owner = ctx.accounts.user.key();
 
         msg!(
             "Bundle {} added successfully with seed {:?}",

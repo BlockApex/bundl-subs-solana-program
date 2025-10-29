@@ -410,7 +410,8 @@ describe("bundl", () => {
         bundleAccount.amountPerInterval.toNumber() == amountPerInterval
       );
       assert.ok(bundleAccount.interval.toNumber() == interval);
-      assert.ok(bundleAccount.lastPaid.toNumber() == 0);
+      assert.ok(bundleAccount.subs.toNumber() == 0);
+      assert.ok(bundleAccount.owner.equals(user));
       assert.ok(bundleAccount.numRecipients == 4);
       assert.ok(bundleAccount.userAtas[0].equals(recipientTokenAccount0));
       assert.ok(bundleAccount.userAtas[1].equals(recipientTokenAccount1));
