@@ -12,7 +12,7 @@ pub struct AddBundle<'info> {
     pub controller: Account<'info, UserBundlSubscriptionController>,
 
     #[account(
-        init, 
+        init_if_needed, 
         payer = user, 
         space = 8 + Bundle::INIT_SPACE, 
         seeds = [

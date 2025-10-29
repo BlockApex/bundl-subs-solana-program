@@ -18,10 +18,6 @@ dotenv.config();
 describe("bundl", () => {
   const secretKey = Uint8Array.from(JSON.parse(process.env.KEY!));
   const bundlKeypair = anchor.web3.Keypair.fromSecretKey(secretKey);
-
-  const recipientSecretKey = Uint8Array.from(
-    JSON.parse(process.env.RECIPIENT!)
-  );
   const recipientKeyPair0 = anchor.web3.Keypair.generate();
   const recipientKeyPair1 = anchor.web3.Keypair.generate();
   const recipientKeyPair2 = anchor.web3.Keypair.generate();
