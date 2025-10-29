@@ -1,5 +1,12 @@
 ## Programs
 
+### Setup
+```bash
+anchor build
+yarn
+anchor keys sync
+```
+
 ### Testing
 ```toml
 [provider]
