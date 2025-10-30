@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::{Bundle, UserBundlSubscriptionController};
+use crate::{Bundle, UserBundlSubscriptionController, Subscription};
 use anchor_spl::token::{Token, TokenAccount, Mint};
 
 #[derive(Accounts)]
@@ -14,10 +14,20 @@ pub struct Trigger<'info> {
 
     #[account(
         mut,
-        seeds = [bundle_seed.as_ref(), controller.key().as_ref()], 
+        seeds = [bundle_seed.as_ref(), user.key().as_ref()], 
         bump
     )]
     pub bundle: Account<'info, Bundle>,
+
+    #[account(
+        mut,
+        seeds = [
+            controller.key().as_ref(),
+            bundle.key().as_ref()
+        ], 
+        bump
+    )]
+    pub subscription: Account<'info, Subscription>,
 
     #[account(
         mut,

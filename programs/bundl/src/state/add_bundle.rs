@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::{Bundle, UserBundlSubscriptionController};
+use crate::{Bundle};
 
 #[derive(Accounts)]
 #[instruction(bundle_seed: [u8; 16])]

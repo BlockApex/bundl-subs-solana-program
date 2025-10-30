@@ -1,5 +1,7 @@
 # Bundl Subscriptions Solana Program
 
+NOTE: THIS BRANCH REFLECTS BUNDLE AS OWNER IP WHEN PEOPLE SUBSCRIBE TO IT, THE OWNER IS SUPPOSED TO GET SOME INCENTIVES (INCOMPLETE) (ARCHIVED)
+
 This repository hosts the on-chain program for Bundl (bundlsubs.com), implemented with Anchor on Solana. The program manages user subscription “bundles” that periodically distribute a per-interval token budget from a user’s SPL token account to up to five recipients.
 
 - Program ID: `FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i`
