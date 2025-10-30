@@ -7,4 +7,5 @@ pub struct Campaign {
     pub mint: Pubkey,           // 32
     pub merkle_root: [u8; 32],  // 32
     pub bump: u8,               // 1
+    pub vault_bump: u8,         // 1
 }

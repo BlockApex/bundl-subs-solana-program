@@ -27,6 +27,8 @@ describe("referrals", () => {
 
   let campaignPda: anchor.web3.PublicKey;
   let campaignBump: number;
+  let vaultPda: anchor.web3.PublicKey;
+  let vaultBump: number;
 
   // // Token related variables
   let user = provider.wallet.publicKey;
@@ -99,6 +101,11 @@ describe("referrals", () => {
 
     [campaignPda, campaignBump] = await anchor.web3.PublicKey.findProgramAddress(
       [Buffer.from("campaign")],
+      program.programId
+    );
+
+    [vaultPda, vaultBump] = await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("vault"), campaignPda.toBuffer()],
       program.programId
     );
   });
@@ -175,6 +182,44 @@ describe("referrals", () => {
       assert.ok(campaignAccount.mint.equals(mint));
       assert.deepEqual(campaignAccount.merkleRoot, Array.from(merkleRoot));
       assert.equal(campaignAccount.bump, campaignBump);
+    });
+  });
+
+  describe("initialize vault", () => {
+    it(`given incorrect authority, should return error`, async () => {
+      let fail = false;
+      try {
+        await program.methods
+          .initializeVault()
+          .accounts({
+            authority: provider.wallet.publicKey,
+            mint: mint,
+          })
+          .signers([])
+          .rpc();
+      }
+      catch (err) {
+        fail = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "Unauthorized");
+      }
+      assert.ok(fail);
+    });
+
+    it(`should initialize vault`, async () => {
+      await program.methods
+        .initializeVault()
+        .accounts({
+          authority: ownerKp.publicKey,
+          mint: mint,
+        })
+        .signers([ownerKp])
+        .rpc();
+
+      const campaignAccount = await program.account.campaign.fetch(
+        campaignPda
+      );
+      assert.ok(campaignAccount.vaultBump === vaultBump);
     });
   });
 });
