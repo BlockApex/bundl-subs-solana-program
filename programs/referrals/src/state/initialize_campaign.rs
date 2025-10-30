@@ -5,7 +5,7 @@ use crate::Campaign;
 #[derive(Accounts)]
 pub struct InitializeCampaign<'info> {
     #[account(
-        init, 
+        init_if_needed, 
         payer = authority, 
         space = 8 + Campaign::INIT_SPACE, 
         seeds = [b"campaign"], 

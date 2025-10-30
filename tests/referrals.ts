@@ -103,7 +103,7 @@ describe("referrals", () => {
     );
   });
 
-  describe("initialize", () => {
+  describe("initialize campaign", () => {
     it(`given incorrect authority, should return error`, async () => {
       let fail = false;
       try {
@@ -132,6 +132,29 @@ describe("referrals", () => {
     });
 
     it(`should initialize campaign`, async () => {
+      const merkleRoot = Buffer.from(
+        "5a81eceaec1a11d779f2583bbb222ac2aa7f12fa2d8398d7c6b8f1b944bf15fc",
+        "hex"
+      );
+      await program.methods
+        .initializeCampaign(Array.from(merkleRoot))
+        .accounts({
+          authority: ownerKp.publicKey,
+          mint: mint,
+        })
+        .signers([ownerKp])
+        .rpc();
+
+      const campaignAccount = await program.account.campaign.fetch(
+        campaignPda
+      );
+      assert.ok(campaignAccount.admin.equals(ownerKp.publicKey));
+      assert.ok(campaignAccount.mint.equals(mint));
+      assert.deepEqual(campaignAccount.merkleRoot, Array.from(merkleRoot));
+      assert.equal(campaignAccount.bump, campaignBump);
+    });
+
+    it(`should update campaign`, async () => {
       const merkleRoot = Buffer.from(
         "5a81eceaec1a11d779f2583bbb222ac2aa7f12fa2d8398d7c6b8f1b944bf15fc",
         "hex"
