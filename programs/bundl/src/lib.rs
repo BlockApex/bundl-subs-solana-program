@@ -80,6 +80,29 @@ pub mod bundl {
         Ok(())
     }
 
+
+    pub fn subscribe_bundle(
+        ctx: Context<SubscribeBundle>,
+        bundle_seed: [u8; 16],
+    ) -> Result<()> {
+        msg!(
+            "Subscription created {:?}",
+            ctx.accounts.subscription.key()
+        );
+
+        let bundle = &mut ctx.accounts.bundle;
+        let subscription = &mut ctx.accounts.subscription;
+
+        subscription.last_paid = 0;
+        bundle.subs = bundle.subs.checked_add(1).ok_or(ErrorCode::Overflow)?;
+        msg!(
+            "Bundle {} subscribed successfully. Total subs: {}",
+            bundle.key(),
+            bundle.subs
+        );
+        Ok(())
+    }
+
     // / Triggers a payment for the specified bundle if the interval has passed
     // / # Arguments
     // / * `ctx` - The context containing the accounts involved in the transaction

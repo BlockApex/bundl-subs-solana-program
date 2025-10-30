@@ -4,7 +4,6 @@ import {
   createApproveInstruction,
   createAssociatedTokenAccount,
   createMint,
-  createTransferInstruction,
   mintTo,
 } from "@solana/spl-token";
 import { BN } from "bn.js";
@@ -436,6 +435,39 @@ describe("bundl", () => {
 
       // sol amount after should be less to indicate user paid rent
       assert.ok(userBalanceAfter < userBalanceBefore, "user did not pay rent");
+    });
+  });
+
+  describe("subscribe bundle", async () => {
+    it("Subscribes to a bundle", async () => {
+      const bundleId = "68fe0143fa35862d934ae947";
+
+      // Hash the bundle ID string with Keccak256 and take first 16 bytes
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      // Call the subscribe_bundle instruction
+      await program.methods
+        .subscribeBundle(Array.from(seed16))
+        .accounts({
+          user,
+        })
+        .rpc();
+
+      const [subscriptionPda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [controllerPda.toBuffer(), bundlePda.toBuffer()],
+        program.programId
+      );
+
+      // Fetch the subscription account
+      const subscriptionAccount = await program.account.subscription.fetch(
+        subscriptionPda
+      );
+      const bundleAccount = await program.account.bundle.fetch(bundlePda);
+
+      // Check subscription values
+      assert.ok(subscriptionAccount.lastPaid.toNumber() === 0);
+      assert.ok(bundleAccount.subs.toNumber() === 1);
     });
   });
 
