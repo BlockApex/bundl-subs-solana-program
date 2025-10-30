@@ -1,18 +1,13 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import {
-  createApproveInstruction,
   createAssociatedTokenAccount,
   createMint,
-  createTransferInstruction,
   mintTo,
 } from "@solana/spl-token";
-import { BN } from "bn.js";
 import { assert } from "chai";
 import * as dotenv from "dotenv";
-import { keccak256 } from "js-sha3";
 import { Referrals } from "../target/types/referrals";
-import { program } from "@coral-xyz/anchor/dist/cjs/native/system";
 
 dotenv.config();
 
@@ -29,6 +24,9 @@ describe("referrals", () => {
   anchor.setProvider(provider);
 
   const program = anchor.workspace.Referrals as Program<Referrals>;
+
+  let campaignPda: anchor.web3.PublicKey;
+  let campaignBump: number;
 
   // // Token related variables
   let user = provider.wallet.publicKey;
@@ -98,11 +96,62 @@ describe("referrals", () => {
       user,
       1_000_000_000 // 1000 USDC
     );
+
+    [campaignPda, campaignBump] = await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("campaign")],
+      program.programId
+    );
   });
 
-  describe("Referrals", () => {
-    it(`initialize`, async () => {
-      await program.methods.initialize().rpc();
+  describe("initialize", () => {
+    it(`given incorrect authority, should return error`, async () => {
+      let fail = false;
+      try {
+        const merkleRoot = Buffer.from(
+          "5a81eceaec1a11d779f2583bbb222ac2aa7f12fa2d8398d7c6b8f1b944bf15fc",
+          "hex"
+        );
+        // Anchor typings expect a JS array of numbers for fixed-size `[u8; 32]` args.
+        // Convert the Buffer to `number[]` to satisfy TypeScript while keeping
+        // the same runtime bytes.
+        const merkleRootArr = Array.from(merkleRoot);
+        await program.methods
+          .initializeCampaign(merkleRootArr)
+          .accounts({
+            authority: provider.wallet.publicKey,
+            mint: mint,
+          })
+          .signers([])
+          .rpc();
+      } catch (err) {
+        fail = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "Unauthorized");
+      }
+      assert.ok(fail);
+    });
+
+    it(`should initialize campaign`, async () => {
+      const merkleRoot = Buffer.from(
+        "5a81eceaec1a11d779f2583bbb222ac2aa7f12fa2d8398d7c6b8f1b944bf15fc",
+        "hex"
+      );
+      await program.methods
+        .initializeCampaign(Array.from(merkleRoot))
+        .accounts({
+          authority: ownerKp.publicKey,
+          mint: mint,
+        })
+        .signers([ownerKp])
+        .rpc();
+
+      const campaignAccount = await program.account.campaign.fetch(
+        campaignPda
+      );
+      assert.ok(campaignAccount.admin.equals(ownerKp.publicKey));
+      assert.ok(campaignAccount.mint.equals(mint));
+      assert.deepEqual(campaignAccount.merkleRoot, Array.from(merkleRoot));
+      assert.equal(campaignAccount.bump, campaignBump);
     });
   });
 });
