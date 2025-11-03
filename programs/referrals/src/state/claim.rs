@@ -10,14 +10,15 @@ pub struct Claim<'info> {
     #[account(mut)]
     pub claimer: Signer<'info>,
 
+    /// Mint of the tokens being claimed
     #[account(
         constraint = mint.key() == campaign.mint @ ErrorCode::InvalidMint,
     )]
     pub mint: Account<'info, Mint>,
 
     /// Campaign holding the root and config
+    /// CHECK: campaign PDA
     #[account(
-        mut,
         seeds = [b"campaign"],
         bump = campaign.bump
     )]
