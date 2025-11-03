@@ -255,11 +255,7 @@ describe("referrals", () => {
       const campaignAccount = await program.account.campaign.fetch(campaignPda);
       assert.ok(campaignAccount.vaultBump === vaultBump);
 
-      vaultAta = await getAssociatedTokenAddress(
-        mint,
-        vaultPda,
-        true
-      );
+      vaultAta = await getAssociatedTokenAddress(mint, vaultPda, true);
     });
   });
 
@@ -334,6 +330,31 @@ describe("referrals", () => {
       );
 
       expect(claimStatus.claimed).to.be.true;
+    });
+
+    it("given recipient has already claimed, should return error", async () => {
+      const proofArr = proof.map((b) => Array.from(b));
+      // Construct flags from the proof positions returned by merkletreejs.
+      // Anchor's program expects flags[i] == 1 when proof[i] is LEFT.
+      const flagsArr = Buffer.from(
+        proofObjects.map((p) => (p.position === "left" ? 1 : 0))
+      );
+      let fail = false;
+      try {
+      await program.methods
+        .claim(amount, proofArr, flagsArr)
+        .accounts({
+          claimer: recipientKeyPair2.publicKey,
+          mint: mint,
+        })
+        .signers([recipientKeyPair2])
+        .rpc();
+      } catch (err) {
+        fail = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "AlreadyClaimed");
+      }
+      assert.ok(fail);
     });
   });
 });
