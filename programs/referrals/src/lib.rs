@@ -33,7 +33,6 @@ pub mod referrals {
     }
     
     /// Create (if absent) the campaign vault ATA owned by the vault authority PDA.
-    /// You can then fund it by sending tokens to it from anywhere.
     #[access_control(check_owner(&ctx.accounts.authority))]
     pub fn initialize_vault(ctx: Context<InitializeVault>) -> Result<()> {
         let campaign = &mut ctx.accounts.campaign;
@@ -67,7 +66,6 @@ pub mod referrals {
 
         // Transfer from vault ATA -> user ATA
         // vault_authority is a PDA that signs the transfer
-        // bind campaign key and bump to locals so the references live long enough
         let campaign_key = campaign.key();
         let bump = campaign.vault_bump;
         let bump_bytes = [bump];
@@ -83,7 +81,7 @@ pub mod referrals {
             to: ctx.accounts.user_token_account.to_account_info(),
             authority: ctx.accounts.vault_authority.to_account_info(),
         };
-        
+
         let signer_seeds: &[&[&[u8]]] = &[vault_authority_seeds];
         let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),

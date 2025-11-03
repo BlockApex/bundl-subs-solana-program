@@ -42,11 +42,6 @@ pub struct Claim<'info> {
     pub vault_authority: UncheckedAccount<'info>,
 
     /// Campaign vault ATA
-    // #[account(
-    //     mut,
-    //     constraint = vault_token_account.mint == mint.key(),
-    //     constraint = vault_token_account.owner == vault_authority.key()
-    // )]
     #[account(
         mut,
         associated_token::mint = mint,
@@ -54,12 +49,7 @@ pub struct Claim<'info> {
     )]
     pub vault_token_account: Account<'info, TokenAccount>,
 
-    /// User's ATA (created if missing by client beforehand, or you can add an init_if_needed pattern)
-    // #[account(
-    //     mut,
-    //     constraint = user_token_account.mint == mint.key(),
-    //     constraint = user_token_account.owner == claimer.key()
-    // )]
+    /// User's ATA
     #[account(
         mut,
         associated_token::mint = mint,

@@ -15,7 +15,7 @@ import { Bundl } from "../target/types/bundl";
 
 dotenv.config();
 
-describe.skip("bundl", () => {
+describe("bundl", () => {
   const secretKey = Uint8Array.from(JSON.parse(process.env.KEY!));
   const bundlKeypair = anchor.web3.Keypair.fromSecretKey(secretKey);
   const recipientKeyPair0 = anchor.web3.Keypair.generate();
