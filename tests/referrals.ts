@@ -1,10 +1,12 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccount,
   createMint,
   getAssociatedTokenAddress,
   mintTo,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { assert, expect } from "chai";
 import { createHash } from "crypto";
@@ -42,6 +44,7 @@ describe("referrals", () => {
   // // Token related variables
   let user = provider.wallet.publicKey;
   let mint: anchor.web3.PublicKey;
+  let fakeMint: anchor.web3.PublicKey;
   let userTokenAccount: anchor.web3.PublicKey;
   let recipientTokenAccount1: anchor.web3.PublicKey;
   let recipientTokenAccount2: anchor.web3.PublicKey;
@@ -49,8 +52,6 @@ describe("referrals", () => {
 
   // test data
   let merkleTree: MerkleTree;
-  let proof: Buffer[];
-  let proofObjects: any[];
   let dataLeaves: leaf[] = [];
 
   before(async () => {
@@ -60,6 +61,14 @@ describe("referrals", () => {
 
     // Step 1: Create test mint (USDC)
     mint = await createMint(
+      provider.connection,
+      provider.wallet.payer,
+      user, // mint authority
+      null,
+      6 // decimals
+    );
+    // Step 1: Create test mint (USDC)
+    fakeMint = await createMint(
       provider.connection,
       provider.wallet.payer,
       user, // mint authority
@@ -215,6 +224,25 @@ describe("referrals", () => {
   });
 
   describe("initialize vault", () => {
+    it(`given incorrect mint, should return error`, async () => {
+      let fail = false;
+      try {
+        await program.methods
+          .initializeVault()
+          .accounts({
+            authority: ownerKp.publicKey,
+            mint: fakeMint,
+          })
+          .signers([ownerKp])
+          .rpc();
+      } catch (err) {
+        fail = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "InvalidMint");
+      }
+      assert.ok(fail);
+    });
+
     it(`given incorrect authority, should return error`, async () => {
       let fail = false;
       try {
@@ -255,6 +283,44 @@ describe("referrals", () => {
     // we selected leaf index 1 (second leaf) during tree construction; that leaf
     // used amount = 1000 * (1 + 1) = 2000, so use 2000 here.
     const amount = new anchor.BN(2000);
+
+    it(`given incorrect mint, should return error`, async () => {
+      // create fake mint vault ata
+      await createAssociatedTokenAccount(
+        provider.connection,
+        provider.wallet.payer,
+        fakeMint,
+        vaultPda,
+        {},
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        true
+      );
+
+      await createAssociatedTokenAccount(
+        provider.connection,
+        provider.wallet.payer,
+        fakeMint,
+        recipientKeyPair2.publicKey, // owner of the ATA
+      );
+
+      let fail = false;
+      try {
+        await program.methods
+          .claim(amount, [], Buffer.from([]))
+          .accounts({
+            claimer: recipientKeyPair2.publicKey,
+            mint: fakeMint,
+          })
+          .signers([recipientKeyPair2])
+          .rpc();
+      } catch (err) {
+        fail = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "InvalidMint");
+      }
+      assert.ok(fail);
+    });
 
     it("given invalid proof, should return error", async () => {
       const { proof, proofObjects } = getProof(merkleTree, 1);

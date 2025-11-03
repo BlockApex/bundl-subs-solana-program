@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{associated_token::AssociatedToken, token::{Mint, Token, TokenAccount}};
-use crate::Campaign;
+use crate::{ErrorCode, Campaign};
 
 #[derive(Accounts)]
 pub struct InitializeVault<'info> {
@@ -11,6 +11,9 @@ pub struct InitializeVault<'info> {
     )]
     pub campaign: Account<'info, Campaign>,
 
+    #[account(
+        constraint = mint.key() == campaign.mint @ ErrorCode::InvalidMint,
+    )]
     pub mint: Account<'info, Mint>,
 
     /// Vault authority PDA that owns the vault ATA
