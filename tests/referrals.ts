@@ -14,6 +14,12 @@ import { Referrals } from "../target/types/referrals";
 
 dotenv.config();
 
+type leaf = {
+  amount: bigint;
+  user: anchor.web3.PublicKey;
+  mint: anchor.web3.PublicKey;
+};
+
 describe("referrals", () => {
   const secretKey = Uint8Array.from(JSON.parse(process.env.KEY!));
   const ownerKp = anchor.web3.Keypair.fromSecretKey(secretKey);
@@ -42,9 +48,10 @@ describe("referrals", () => {
   let recipientTokenAccount3: anchor.web3.PublicKey;
 
   // test data
-  let merkleRoot: Buffer;
+  let merkleTree: MerkleTree;
   let proof: Buffer[];
   let proofObjects: any[];
+  let dataLeaves: leaf[] = [];
 
   before(async () => {
     // Airdrop some SOL to the user and recipient
@@ -142,50 +149,27 @@ describe("referrals", () => {
 
     it("should initialize campaign with dummy leaves", async () => {
       // --------------- STEP 1: Build the Merkle tree ----------------
-      // Each leaf: keccak256(amount || user_pubkey || mint)
-      const dummyMints = Array(3)
+      // create dummy data leaves
+      dataLeaves = Array(3)
         .fill(null)
-        .map(() => mint);
+        .map((_, i) => {
+          return {
+            amount: BigInt(1000 * (i + 1)), // 1000, 2000, 3000
+            user:
+              i === 0
+                ? recipientKeyPair1.publicKey
+                : i === 1
+                ? recipientKeyPair2.publicKey
+                : recipientKeyPair3.publicKey,
+            mint: mint,
+          };
+        });
 
-      const dummyUsers = Array(3).fill(null);
-      dummyUsers[0] = recipientKeyPair1.publicKey;
-      dummyUsers[1] = recipientKeyPair2.publicKey;
-      dummyUsers[2] = recipientKeyPair3.publicKey;
-
-      // We'll pick the 2nd leaf for the test claimer
-      // SHA-256 domain-separated leaf: sha256("airdrop" || amount_le || user || mint)
-      const sha256 = (data: Buffer) =>
-        createHash("sha256").update(data).digest();
-
-      const leaves = dummyUsers.map((user, i) => {
-        const amt = Buffer.alloc(8);
-        amt.writeBigUInt64LE(BigInt(1000 * (i + 1)));
-        return sha256(
-          Buffer.concat([
-            Buffer.from("airdrop"),
-            amt,
-            user.toBuffer(),
-            dummyMints[i].toBuffer(),
-          ])
-        );
-      });
-
-      // Use ordered pairs (no sorting) so proof positions correspond to left/right
-      const tree = new MerkleTree(leaves, sha256, { sortPairs: false });
-      merkleRoot = tree.getRoot();
-
-      // pick leaf index 1 for the test claimer
-      proofObjects = tree.getProof(leaves[1]);
-      proof = proofObjects.map((p) => p.data);
-      console.log("Merkle root:", merkleRoot.toString("hex"));
-      console.log(
-        "Proof for leaf 1:",
-        proof.map((p) => p.toString("hex"))
-      );
+      merkleTree = createMerkleTree(dataLeaves);
 
       // --------------- STEP 2: Create campaign ----------------
       await program.methods
-        .initializeCampaign(Array.from(merkleRoot))
+        .initializeCampaign(Array.from(merkleTree.getRoot()))
         .accounts({
           authority: ownerKp.publicKey,
           mint,
@@ -196,7 +180,10 @@ describe("referrals", () => {
       const campaignAccount = await program.account.campaign.fetch(campaignPda);
       assert.ok(campaignAccount.admin.equals(ownerKp.publicKey));
       assert.ok(campaignAccount.mint.equals(mint));
-      assert.deepEqual(campaignAccount.merkleRoot, Array.from(merkleRoot));
+      assert.deepEqual(
+        campaignAccount.merkleRoot,
+        Array.from(merkleTree.getRoot())
+      );
       assert.equal(campaignAccount.bump, campaignBump);
     });
 
@@ -212,13 +199,16 @@ describe("referrals", () => {
           .accounts({
             authority: ownerKp.publicKey,
             mint: mint,
-        })
-        .signers([ownerKp])
-        .rpc();
+          })
+          .signers([ownerKp])
+          .rpc();
       } catch (err) {
         fail = true;
         // console.log(err.);
-        assert.equal(err.transactionMessage, "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x0");
+        assert.equal(
+          err.transactionMessage,
+          "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x0"
+        );
       }
       assert.ok(fail);
     });
@@ -267,6 +257,7 @@ describe("referrals", () => {
     const amount = new anchor.BN(2000);
 
     it("given invalid proof, should return error", async () => {
+      const { proof, proofObjects } = getProof(merkleTree, 1);
       const proofArr = proof.map((b) => Array.from(b));
       // Messing up the flags to make the proof invalid
       const flagsArr = Buffer.from(
@@ -291,12 +282,10 @@ describe("referrals", () => {
     });
 
     it("claims successfully using valid proof", async () => {
+      const { proof, proofObjects } = getProof(merkleTree, 1);
+      const flagsArr = getFlags(proofObjects);
+      // converting Buffer[] to number[][]
       const proofArr = proof.map((b) => Array.from(b));
-      // Construct flags from the proof positions returned by merkletreejs.
-      // Anchor's program expects flags[i] == 1 when proof[i] is LEFT.
-      const flagsArr = Buffer.from(
-        proofObjects.map((p) => (p.position === "left" ? 1 : 0))
-      );
 
       // Fund the vault with sufficient tokens (mint authority is provider.wallet)
       await mintTo(
@@ -335,22 +324,20 @@ describe("referrals", () => {
     });
 
     it("given recipient has already claimed, should return error", async () => {
+      const { proof, proofObjects } = getProof(merkleTree, 1);
+      const flagsArr = getFlags(proofObjects);
+      // converting Buffer[] to number[][]
       const proofArr = proof.map((b) => Array.from(b));
-      // Construct flags from the proof positions returned by merkletreejs.
-      // Anchor's program expects flags[i] == 1 when proof[i] is LEFT.
-      const flagsArr = Buffer.from(
-        proofObjects.map((p) => (p.position === "left" ? 1 : 0))
-      );
       let fail = false;
       try {
-      await program.methods
-        .claim(amount, proofArr, flagsArr)
-        .accounts({
-          claimer: recipientKeyPair2.publicKey,
-          mint: mint,
-        })
-        .signers([recipientKeyPair2])
-        .rpc();
+        await program.methods
+          .claim(amount, proofArr, flagsArr)
+          .accounts({
+            claimer: recipientKeyPair2.publicKey,
+            mint: mint,
+          })
+          .signers([recipientKeyPair2])
+          .rpc();
       } catch (err) {
         fail = true;
         // console.log(err)
@@ -381,4 +368,46 @@ async function requestAirdrop(
   });
 
   // console.log(`Airdropped ${amount} SOL to ${publicKey.toBase58()}`);
+}
+
+function createMerkleTree(data: leaf[]): MerkleTree {
+  // SHA-256 domain-separated leaf: sha256("airdrop" || amount_le || user || mint)
+  const sha256 = (data: Buffer) => createHash("sha256").update(data).digest();
+
+  const leaves = data.map((leaf, i) => {
+    const amt = Buffer.alloc(8);
+    amt.writeBigUInt64LE(leaf.amount);
+    return sha256(
+      Buffer.concat([
+        Buffer.from("airdrop"),
+        amt,
+        leaf.user.toBuffer(),
+        leaf.mint.toBuffer(),
+      ])
+    );
+  });
+
+  // Use ordered pairs (no sorting) so proof positions correspond to left/right
+  return new MerkleTree(leaves, sha256, { sortPairs: false });
+}
+
+function getProof(
+  tree: MerkleTree,
+  index: number
+): { proof: Buffer[]; proofObjects: any[] } {
+  const leaves = tree.getLeaves();
+  const proofObjects = tree.getProof(leaves[index]);
+  const proof = proofObjects.map((p) => p.data);
+  return { proof, proofObjects };
+}
+
+function getFlags(
+  proofObjects: any[]
+): Buffer {
+  // Construct flags from the proof positions returned by merkletreejs.
+  // Anchor's program expects flags[i] == 1 when proof[i] is LEFT.
+  const flagsArr = Buffer.from(
+    proofObjects.map((p) => (p.position === "left" ? 1 : 0))
+  );
+  return flagsArr;
 }
