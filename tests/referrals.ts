@@ -267,6 +267,31 @@ describe("referrals", () => {
     // we selected leaf index 1 (second leaf) during tree construction; that leaf
     // used amount = 1000 * (1 + 1) = 2000, so use 2000 here.
     const amount = new anchor.BN(2000);
+
+    it("given invalid proof, should return error", async () => {
+      const proofArr = proof.map((b) => Array.from(b));
+      // Messing up the flags to make the proof invalid
+      const flagsArr = Buffer.from(
+        proofObjects.map((p) => (p.position === "right" ? 1 : 0))
+      );
+      let fail = false;
+      try {
+        await program.methods
+          .claim(amount, proofArr, flagsArr)
+          .accounts({
+            claimer: recipientKeyPair2.publicKey,
+            mint: mint,
+          })
+          .signers([recipientKeyPair2])
+          .rpc();
+      } catch (err) {
+        fail = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "InvalidProof");
+      }
+      assert.ok(fail);
+    });
+
     it("claims successfully using valid proof", async () => {
       const proofArr = proof.map((b) => Array.from(b));
       // Construct flags from the proof positions returned by merkletreejs.
