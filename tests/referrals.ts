@@ -200,25 +200,27 @@ describe("referrals", () => {
       assert.equal(campaignAccount.bump, campaignBump);
     });
 
-    it.skip(`should update campaign`, async () => {
+    it(`given campaign is initialized, should return error`, async () => {
       const merkleRoot = Buffer.from(
         "5a81eceaec1a11d779f2583bbb222ac2aa7f12fa2d8398d7c6b8f1b944bf15fc",
         "hex"
       );
-      await program.methods
-        .initializeCampaign(Array.from(merkleRoot))
-        .accounts({
-          authority: ownerKp.publicKey,
-          mint: mint,
+      let fail = false;
+      try {
+        await program.methods
+          .initializeCampaign(Array.from(merkleRoot))
+          .accounts({
+            authority: ownerKp.publicKey,
+            mint: mint,
         })
         .signers([ownerKp])
         .rpc();
-
-      const campaignAccount = await program.account.campaign.fetch(campaignPda);
-      assert.ok(campaignAccount.admin.equals(ownerKp.publicKey));
-      assert.ok(campaignAccount.mint.equals(mint));
-      assert.deepEqual(campaignAccount.merkleRoot, Array.from(merkleRoot));
-      assert.equal(campaignAccount.bump, campaignBump);
+      } catch (err) {
+        fail = true;
+        // console.log(err.);
+        assert.equal(err.transactionMessage, "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x0");
+      }
+      assert.ok(fail);
     });
   });
 
