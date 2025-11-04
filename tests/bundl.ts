@@ -8,7 +8,7 @@ import {
   mintTo,
 } from "@solana/spl-token";
 import { BN } from "bn.js";
-import { assert } from "chai";
+import { assert, expect } from "chai";
 import * as dotenv from "dotenv";
 import { keccak256 } from "js-sha3";
 import { Bundl } from "../target/types/bundl";
@@ -816,8 +816,7 @@ describe("bundl", () => {
       // console.log(atas.map((x) => x.toBase58()));
 
       await program.methods
-        .trigger(
-          Array.from(seed16), [
+        .trigger(Array.from(seed16), [
           new BN(20_000_000),
           new BN(20_000_000),
           new BN(20_000_000),
@@ -1030,6 +1029,66 @@ describe("bundl", () => {
         ])
         .signers([bundlKeypair])
         .rpc();
+    });
+  });
+
+  describe("cancel bundle", async () => {
+    it("given incorrect signer, should return error", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      let failed = false;
+      try {
+        await program.methods
+          .cancelBundle(Array.from(seed16))
+          .accounts({
+            user: user,
+          })
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err);
+        expect(err.toString()).to.include("Error: unknown signer:");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
+    it("cancels a bundle", async () => {
+      // fetch user sol balance before
+      const userBalanceBefore = await provider.connection.getBalance(user);
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      await program.methods
+        .cancelBundle(Array.from(seed16))
+        .accounts({
+          user: user,
+        })
+        .rpc();
+
+      // Try to fetch the bundle account — should fail
+      let failed = false;
+      try {
+        await program.account.bundle.fetch(bundlePda1);
+      } catch (err: any) {
+        // Error: Account does not exist or has no data
+        expect(err.toString()).to.include(
+          "Error: Account does not exist or has no data"
+        );
+        failed = true;
+      }
+      assert.ok(failed, "Expected fetch to fail but it succeeded");
+
+      // fetch user sol balance after
+      const userBalanceAfter = await provider.connection.getBalance(user);
+      // user balance after should be more to indicate rent refunded
+      assert.ok(
+        userBalanceAfter > userBalanceBefore,
+        "user did not receive rent refund"
+      );
     });
   });
 });

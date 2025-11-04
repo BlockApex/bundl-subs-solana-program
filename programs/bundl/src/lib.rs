@@ -183,6 +183,19 @@ pub mod bundl {
 
         Ok(())
     }
+
+    /// Cancels the specified bundle and closes its account
+    /// # Arguments
+    /// * `ctx` - The context containing the accounts involved in the transaction
+    /// * `bundle_seed` - The identifier of the bundle to cancel
+    pub fn cancel_bundle(
+        ctx: Context<CancelBundle>,
+        _bundle_seed: [u8; 16],
+    ) -> Result<()> {
+        let bundle = &ctx.accounts.bundle;
+        msg!("Bundle {} cancelled", bundle.key());
+        Ok(())
+    }
 }
 
 fn check_owner(authority: &Signer) -> Result<()> {
