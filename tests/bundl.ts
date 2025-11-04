@@ -774,6 +774,45 @@ describe("bundl", () => {
       assert.ok(failed, "Expected call to fail but it succeeded");
     });
 
+    it("given paused bundle, it fails with `BundlePaused`", async () => {
+      // pause the bundle first
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      await program.methods
+        .pauseBundle(Array.from(seed16))
+        .accounts({
+          user: user,
+        })
+        .rpc();
+
+      let failed = false;
+      try {
+        await program.methods
+          .trigger(Array.from(seed16), amountArray)
+          .accounts({
+            authority: bundlKeypair.publicKey,
+            user: user,
+            mintAccount: mint,
+          })
+          .remainingAccounts([
+            {
+              pubkey: recipientTokenAccount0,
+              isWritable: true,
+              isSigner: false,
+            },
+          ])
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "BundlePaused");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
     it("given multiple splits, it triggers a bundle payment to multiple recipients", async () => {
       const bundleId = "68fe0143fa35862d934ae947";
       const hash = keccak256(bundleId);

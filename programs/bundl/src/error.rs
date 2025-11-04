@@ -20,4 +20,6 @@ pub enum ErrorCode {
     InvalidNumRecipientsProvided,
     #[msg("Invalid recipient")]
     InvalidRecipient,
+    #[msg("Bundle is paused")]
+    BundlePaused,
 }

@@ -115,6 +115,12 @@ pub mod bundl {
             ErrorCode::InvalidNumRecipientsProvided
         );
 
+        require_eq!(
+            bundle.is_paused,
+            false,
+            ErrorCode::BundlePaused
+        );
+
         // check if enough time has passed since last payment
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
