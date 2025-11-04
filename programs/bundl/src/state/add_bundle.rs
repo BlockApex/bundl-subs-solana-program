@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
 use crate::{Bundle, UserBundlSubscriptionController};
+use crate::constant::CONTROLLER_SEED;
 
 #[derive(Accounts)]
 #[instruction(bundle_seed: [u8; 16])]
 pub struct AddBundle<'info> {
     #[account(
         mut,
-        seeds = [b"controller", user.key().as_ref()],
+        seeds = [CONTROLLER_SEED, user.key().as_ref()],
         bump = controller.bump,
     )]
     pub controller: Account<'info, UserBundlSubscriptionController>,

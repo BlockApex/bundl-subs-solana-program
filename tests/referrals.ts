@@ -301,7 +301,7 @@ describe("referrals", () => {
         provider.connection,
         provider.wallet.payer,
         fakeMint,
-        recipientKeyPair2.publicKey, // owner of the ATA
+        recipientKeyPair2.publicKey // owner of the ATA
       );
 
       let fail = false;
@@ -467,9 +467,7 @@ function getProof(
   return { proof, proofObjects };
 }
 
-function getFlags(
-  proofObjects: any[]
-): Buffer {
+function getFlags(proofObjects: any[]): Buffer {
   // Construct flags from the proof positions returned by merkletreejs.
   // Anchor's program expects flags[i] == 1 when proof[i] is LEFT.
   const flagsArr = Buffer.from(

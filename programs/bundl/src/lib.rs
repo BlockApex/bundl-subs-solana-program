@@ -3,6 +3,7 @@ pub mod state;
 pub use state::*;
 pub mod error;
 use crate::error::ErrorCode;
+pub mod constant;
 
 declare_id!("FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i");
 
@@ -170,7 +171,7 @@ pub mod bundl {
             let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
             anchor_spl::token::transfer(
                 cpi_ctx.with_signer(&[&[
-                    b"controller",
+                    constant::CONTROLLER_SEED,
                     controller.user.as_ref(),
                     &[controller.bump],
                 ]]),

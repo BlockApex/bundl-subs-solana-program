@@ -108,7 +108,7 @@ describe("bundl", () => {
     // Step 4: Derive controller PDA
     [controllerPda, controllerBump] =
       await anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("controller"), user.toBuffer()],
+        [Buffer.from("controller_v2"), user.toBuffer()],
         program.programId
       );
   });
