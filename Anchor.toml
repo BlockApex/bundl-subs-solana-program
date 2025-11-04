@@ -5,11 +5,12 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-bundl = "FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i"
-
 [programs.devnet]
 bundl = "FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i"
+
+[programs.localnet]
+bundl = "FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i"
+referrals = "35YWrusRg5PBtjKvrKjckewYrfTwGEEx1rqTzwPkTRzq"
 
 [registry]
 url = "https://api.apr.dev"
