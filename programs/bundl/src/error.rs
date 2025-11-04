@@ -22,4 +22,8 @@ pub enum ErrorCode {
     InvalidRecipient,
     #[msg("Bundle is paused")]
     BundlePaused,
+    #[msg("Bundle is already paused")]
+    BundleAlreadyPaused,
+    #[msg("Bundle is already unpaused")]
+    BundleAlreadyUnpaused,
 }

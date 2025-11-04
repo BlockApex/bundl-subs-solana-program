@@ -18,9 +18,7 @@ pub mod bundl {
     /// Initializes the user bundl subscription controller account
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
-    pub fn initialize_controller(
-        ctx: Context<InitializeController>,
-    ) -> Result<()> {
+    pub fn initialize_controller(ctx: Context<InitializeController>) -> Result<()> {
         // read from ctx
         let controller = &mut ctx.accounts.controller;
         let user_token_account = &ctx.accounts.from_token_account;
@@ -116,11 +114,7 @@ pub mod bundl {
             ErrorCode::InvalidNumRecipientsProvided
         );
 
-        require_eq!(
-            bundle.is_paused,
-            false,
-            ErrorCode::BundlePaused
-        );
+        require_eq!(bundle.is_paused, false, ErrorCode::BundlePaused);
 
         // check if enough time has passed since last payment
         let clock = Clock::get()?;
@@ -196,10 +190,7 @@ pub mod bundl {
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
     /// * `bundle_seed` - The identifier of the bundle to cancel
-    pub fn cancel_bundle(
-        ctx: Context<CancelBundle>,
-        _bundle_seed: [u8; 16],
-    ) -> Result<()> {
+    pub fn cancel_bundle(ctx: Context<CancelBundle>, _bundle_seed: [u8; 16]) -> Result<()> {
         let bundle = &ctx.accounts.bundle;
         msg!("Bundle {} cancelled", bundle.key());
         Ok(())
@@ -209,11 +200,10 @@ pub mod bundl {
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
     /// * `_bundle_seed` - The identifier of the bundle to pause
-    pub fn pause_bundle(
-        ctx: Context<PauseBundle>,
-        _bundle_seed: [u8; 16],
-    ) -> Result<()> {
+    pub fn pause_bundle(ctx: Context<PauseBundle>, _bundle_seed: [u8; 16]) -> Result<()> {
         let bundle = &mut ctx.accounts.bundle;
+        require_eq!(bundle.is_paused, false, ErrorCode::BundleAlreadyPaused);
+
         bundle.is_paused = true;
         msg!("Bundle {} paused", bundle.key());
         Ok(())
@@ -223,11 +213,10 @@ pub mod bundl {
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
     /// * `_bundle_seed` - The identifier of the bundle to resume
-    pub fn resume_bundle(
-        ctx: Context<ResumeBundle>,
-        _bundle_seed: [u8; 16],
-    ) -> Result<()> {
+    pub fn resume_bundle(ctx: Context<ResumeBundle>, _bundle_seed: [u8; 16]) -> Result<()> {
         let bundle = &mut ctx.accounts.bundle;
+        require_eq!(bundle.is_paused, true, ErrorCode::BundleAlreadyUnpaused);
+
         bundle.is_paused = false;
         msg!("Bundle {} resumed", bundle.key());
         Ok(())

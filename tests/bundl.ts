@@ -1125,6 +1125,21 @@ describe("bundl", () => {
       const hash = keccak256(bundleId);
       const seed16 = Buffer.from(hash, "hex").slice(0, 16);
 
+      // Make the test idempotent: if the bundle is already paused from a
+      // previous test, resume it first so we can assert the pause operation
+      // works here.
+      try {
+        const existing = await program.account.bundle.fetch(bundlePda1);
+        if (existing.isPaused) {
+          await program.methods
+            .resumeBundle(Array.from(seed16))
+            .accounts({ user: user })
+            .rpc();
+        }
+      } catch (err) {
+        throw err;
+      }
+
       await program.methods
         .pauseBundle(Array.from(seed16))
         .accounts({
@@ -1137,6 +1152,27 @@ describe("bundl", () => {
 
       // Check bundle is paused
       assert.ok(bundleAccount.isPaused, "Bundle is not paused");
+    });
+
+    it("given already paused bundle, should return error", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      let failed = false;
+      try {
+        await program.methods
+          .pauseBundle(Array.from(seed16))
+          .accounts({
+            user: user,
+          })
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err);
+        assert.equal(err.error.errorCode.code, "BundleAlreadyPaused");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
     });
   });
 
@@ -1158,6 +1194,27 @@ describe("bundl", () => {
 
       // Check bundle is unpaused
       assert.ok(!bundleAccount.isPaused, "Bundle is still paused");
+    });
+
+    it("given already unpaused bundle, should return error", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      let failed = false;
+      try {
+        await program.methods
+          .resumeBundle(Array.from(seed16))
+          .accounts({
+            user: user,
+          })
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err);
+        assert.equal(err.error.errorCode.code, "BundleAlreadyUnpaused");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
     });
   });
 

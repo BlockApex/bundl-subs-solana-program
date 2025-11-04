@@ -18,7 +18,7 @@ The program organizes user subscriptions via two PDA-backed accounts:
 
 - Controller PDA (one per user): Signs CPI SPL token transfers on behalf of the user.
 
-  - Seeds: `["controller", user_pubkey]`
+  - Seeds: `["controller_v2", user_pubkey]`
   - Stores: `user` (Pubkey), `user_token_account` (source SPL token account), `bump`
 
 - Bundle PDA (one per subscription “bundle”, under a controller):
@@ -66,7 +66,7 @@ Signature requirements:
 Controller PDA
 
 - Defined in: [state/initialize_controller.rs](https://github.com/BlockApex/bundl-subs-solana-program/blob/6c837c6ddb7bb3c238ef9ce24adcef9e04266630/programs/bundl/src/state/initialize_controller.rs) and [state/user_bundl_subscription_controller.rs](https://github.com/BlockApex/bundl-subs-solana-program/blob/main/programs/bundl/src/state/user_bundl_subscription_controller.rs)
-- Seeds: `["controller", authority]`
+  -- Seeds: `["controller_v2", authority]`
 - Stores the user’s pubkey, the associated source token account, and the PDA bump.
 
 Bundle PDA
@@ -88,7 +88,7 @@ All instruction handlers are in [lib.rs](https://github.com/BlockApex/bundl-subs
 - Parameters: none
 - Accounts (summary):
   - authority: Signer (the user)
-  - controller: PDA; seeds `["controller", authority]`, init_if_needed
+  - controller: PDA; seeds `["controller_v2", authority]`, init_if_needed
   - mint_account: SPL Token mint of the token being paid out
   - from_token_account: Associated token account for (mint_account, authority)
   - token_program, system_program
@@ -106,7 +106,7 @@ All instruction handlers are in [lib.rs](https://github.com/BlockApex/bundl-subs
   - `user_atas: [Pubkey; MAX_BUNDLES_PER_CONTROLLER]` — recipient SPL token accounts (ATAs)
   - `num_recipients: u8` — must be 1..=MAX_BUNDLES_PER_CONTROLLER
 - Accounts (summary) [see: state/add_bundle.rs]:
-  - controller: PDA; seeds `["controller", user]`
+  - controller: PDA; seeds `["controller_v2", user]`
   - bundle: PDA; seeds `[bundle_seed, controller]`, `init_if_needed`, `payer = user`
   - authority: Signer (must equal Owner; enforced by access_control in lib.rs)
   - user: Signer (payer for bundle account allocation)
@@ -206,7 +206,7 @@ const PROGRAM_ID = new PublicKey(
   "FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i"
 );
 const [controllerPda] = PublicKey.findProgramAddressSync(
-  [Buffer.from("controller"), user.publicKey.toBuffer()],
+  [Buffer.from("controller_v2"), user.publicKey.toBuffer()],
   PROGRAM_ID
 );
 
