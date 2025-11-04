@@ -63,11 +63,11 @@ pub mod bundl {
         bundle_seed: [u8; 16],
         amount_per_interval: u64,
         interval: u64,
-        user_atas: [Pubkey; 5],
+        user_atas: [Pubkey; constant::MAX_BUNDLES_PER_CONTROLLER as usize],
         num_recipients: u8,
     ) -> Result<()> {
         // assert valid num_recipients
-        if num_recipients == 0 || num_recipients > 5 {
+        if num_recipients == 0 || num_recipients > constant::MAX_BUNDLES_PER_CONTROLLER {
             return Err(error!(ErrorCode::InvalidNumRecipients));
         }
 
@@ -102,7 +102,7 @@ pub mod bundl {
     pub fn trigger<'info>(
         ctx: Context<'_, '_, 'info, 'info, Trigger<'info>>,
         bundle_seed: [u8; 16],
-        amounts: [u64; 5],
+        amounts: [u64; constant::MAX_BUNDLES_PER_CONTROLLER as usize],
     ) -> Result<()> {
         // read from ctx
         let bundle = &mut ctx.accounts.bundle;

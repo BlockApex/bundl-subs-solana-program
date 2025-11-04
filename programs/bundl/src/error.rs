@@ -14,7 +14,7 @@ pub enum ErrorCode {
     IntervalNotPassed,
     #[msg("Total amounts is greater than bundle's amount per interval")]
     InvalidTotalAmount,
-    #[msg("Number of recipients must be between 1 and 5")]
+    #[msg("Number of recipients must be between 1 and MAX_BUNDLES_PER_CONTROLLER")]
     InvalidNumRecipients,
     #[msg("Number of recipients provided does not match the bundle")]
     InvalidNumRecipientsProvided,

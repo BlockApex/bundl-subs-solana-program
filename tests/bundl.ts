@@ -45,6 +45,9 @@ describe("bundl", () => {
   let recipientTokenAccount2: anchor.web3.PublicKey;
   let recipientTokenAccount3: anchor.web3.PublicKey;
 
+  // env related variables
+  const MAX_BUNDLES_PER_CONTROLLER = 10;
+
   before(async () => {
     // Airdrop some SOL to the user and recipient
     await requestAirdrop(provider.connection, bundlKeypair.publicKey, 2);
@@ -272,7 +275,7 @@ describe("bundl", () => {
       assert.ok(failed, "Expected call to fail but it succeeded");
     });
 
-    it("given more than 5 recipients, then fails with `InvalidNumRecipients`", async () => {
+    it("given more than MAX_BUNDLES_PER_CONTROLLER recipients, then fails with `InvalidNumRecipients`", async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
       const bundleId = "test-too-many-recipients";
@@ -295,8 +298,13 @@ describe("bundl", () => {
               anchor.web3.PublicKey.default,
               anchor.web3.PublicKey.default,
               anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
             ],
-            6 // More than 5 recipients
+            11 // More than MAX_BUNDLES_PER_CONTROLLER recipients
           )
           .accounts({
             user: user,
@@ -446,6 +454,11 @@ describe("bundl", () => {
       new BN(0),
       new BN(0),
       new BN(0),
+      new BN(0),
+      new BN(0),
+      new BN(0),
+      new BN(0),
+      new BN(0),
     ];
     before(async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
@@ -518,6 +531,11 @@ describe("bundl", () => {
         await program.methods
           .trigger(Array.from(seed16), [
             new BN(200_000_000),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
             new BN(0),
             new BN(0),
             new BN(0),
@@ -628,6 +646,11 @@ describe("bundl", () => {
         await program.methods
           .trigger(Array.from(seed16), [
             new BN(200),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
             new BN(0),
             new BN(0),
             new BN(0),
@@ -849,7 +872,7 @@ describe("bundl", () => {
       const offset = 8 + 8 + 8 + 8; // = 48
       const data = accountInfo.data.slice(offset);
       const atas = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < MAX_BUNDLES_PER_CONTROLLER; i++) {
         atas.push(new anchor.web3.PublicKey(data.slice(i * 32, (i + 1) * 32)));
       }
       // console.log(atas.map((x) => x.toBase58()));
@@ -860,6 +883,11 @@ describe("bundl", () => {
           new BN(20_000_000),
           new BN(20_000_000),
           new BN(40_000_000),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
           new BN(0),
         ])
         .accounts({
@@ -977,6 +1005,11 @@ describe("bundl", () => {
             anchor.web3.PublicKey.default,
             anchor.web3.PublicKey.default,
             anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
           ],
           1
         )
@@ -991,6 +1024,11 @@ describe("bundl", () => {
       await program.methods
         .trigger(Array.from(seed16), [
           new BN(100_000_000),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
           new BN(0),
           new BN(0),
           new BN(0),
@@ -1017,6 +1055,11 @@ describe("bundl", () => {
         await program.methods
           .trigger(Array.from(seed16), [
             new BN(100_000_000),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
             new BN(0),
             new BN(0),
             new BN(0),
@@ -1049,6 +1092,11 @@ describe("bundl", () => {
       await program.methods
         .trigger(Array.from(seed16), [
           new BN(100_000_000),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
           new BN(0),
           new BN(0),
           new BN(0),
