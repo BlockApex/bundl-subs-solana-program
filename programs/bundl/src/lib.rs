@@ -217,6 +217,20 @@ pub mod bundl {
         msg!("Bundle {} paused", bundle.key());
         Ok(())
     }
+
+    /// Resumes the specified bundle, allowing payments to continue
+    /// # Arguments
+    /// * `ctx` - The context containing the accounts involved in the transaction
+    /// * `_bundle_seed` - The identifier of the bundle to resume
+    pub fn resume_bundle(
+        ctx: Context<ResumeBundle>,
+        _bundle_seed: [u8; 16],
+    ) -> Result<()> {
+        let bundle = &mut ctx.accounts.bundle;
+        bundle.is_paused = false;
+        msg!("Bundle {} resumed", bundle.key());
+        Ok(())
+    }
 }
 
 fn check_owner(authority: &Signer) -> Result<()> {

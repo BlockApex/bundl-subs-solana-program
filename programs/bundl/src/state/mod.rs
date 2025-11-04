@@ -18,3 +18,6 @@ pub use cancel_bundle::*;
 
 pub mod pause_bundle;
 pub use pause_bundle::*;
+
+pub mod resume_bundle;
+pub use resume_bundle::*;

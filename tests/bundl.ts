@@ -1092,6 +1092,27 @@ describe("bundl", () => {
     });
   });
 
+  describe("unpause bundle", async () => {
+    it("unpauses a bundle", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      await program.methods
+        .resumeBundle(Array.from(seed16))
+        .accounts({
+          user: user,
+        })
+        .rpc();
+
+      // Fetch the bundle account
+      const bundleAccount = await program.account.bundle.fetch(bundlePda1);
+
+      // Check bundle is unpaused
+      assert.ok(!bundleAccount.isPaused, "Bundle is still paused");
+    });
+  });
+
   describe("cancel bundle", async () => {
     it("given incorrect signer, should return error", async () => {
       const bundleId = "bundle-trigger-1";
