@@ -28,6 +28,7 @@ The program organizes user subscriptions via two PDA-backed accounts:
     - `last_paid: i64` (unix timestamp, 0 until first run)
     - `user_atas: [Pubkey; 5]` (recipient ATAs)
     - `num_recipients: u8` (1..=5)
+    - `is_paused: bool` (whether the bundle is paused and should not trigger)
 
 A privileged Owner is allowed to add bundles and to trigger payment runs once the configured interval has elapsed.
 
@@ -41,6 +42,12 @@ The controller PDA signs SPL token transfers using these signer seeds:
 - Owner (hardcoded): `BTFsHVsT8V9gXrgDNKdCw574dR9X8hom9KWsiKBvjbSi`
   - Only this authority can add bundles and trigger payments.
 - User: The actual token holder who initializes the controller and whose SPL token account funds are used.
+
+Additional user capabilities:
+- The bundle owner (the `user` / controller owner) may pause, resume, or cancel their bundles:
+  - `pause_bundle` — mark a bundle paused (prevents `trigger` from running)
+  - `resume_bundle` — unpause a previously paused bundle
+  - `cancel_bundle` — close the bundle account and return its lamports to the user
 
 Signature requirements:
 - initialize_controller: signed by the user.
@@ -119,6 +126,7 @@ All instruction handlers are in [lib.rs](https://github.com/BlockApex/bundl-subs
 - Validations (lib.rs):
   - Provided recipient accounts length must equal `bundle.num_recipients`.
   - `Clock::get().unix_timestamp - bundle.last_paid >= bundle.interval`.
+  - `bundle.is_paused` must be `false` (paused bundles will error with `BundlePaused`).
   - Sum of active `amounts` entries must be <= `bundle.amount_per_interval`.
   - `user_token_account.amount` must be >= total.
   - Each provided recipient account must equal the stored `bundle.user_atas[i]`.
@@ -144,6 +152,7 @@ Defined in [error.rs](https://github.com/BlockApex/bundl-subs-solana-program/blo
 - InvalidNumRecipients — Number of recipients must be 1..=5.
 - InvalidNumRecipientsProvided — Mismatch between provided accounts and `num_recipients`.
 - InvalidRecipient — Provided recipient ATA does not match the stored one.
+ - BundlePaused — The bundle is paused and cannot be triggered.
 
 ---
 
