@@ -79,6 +79,7 @@ pub mod bundl {
         bundle.last_paid = 0;
         bundle.user_atas = user_atas;
         bundle.num_recipients = num_recipients;
+        bundle.is_paused = false;
 
         msg!(
             "Bundle {} added successfully with seed {:?}",
@@ -194,6 +195,20 @@ pub mod bundl {
     ) -> Result<()> {
         let bundle = &ctx.accounts.bundle;
         msg!("Bundle {} cancelled", bundle.key());
+        Ok(())
+    }
+
+    /// Pauses the specified bundle, preventing further payments
+    /// # Arguments
+    /// * `ctx` - The context containing the accounts involved in the transaction
+    /// * `_bundle_seed` - The identifier of the bundle to pause
+    pub fn pause_bundle(
+        ctx: Context<PauseBundle>,
+        _bundle_seed: [u8; 16],
+    ) -> Result<()> {
+        let bundle = &mut ctx.accounts.bundle;
+        bundle.is_paused = true;
+        msg!("Bundle {} paused", bundle.key());
         Ok(())
     }
 }

@@ -419,6 +419,7 @@ describe("bundl", () => {
       assert.ok(
         bundleAccount.userAtas[4].equals(anchor.web3.SystemProgram.programId)
       );
+      assert.ok(!bundleAccount.isPaused, "Bundle is paused");
 
       // get sol amount of user after
       const userBalanceAfter = await provider.connection.getBalance(user);
@@ -774,7 +775,6 @@ describe("bundl", () => {
     });
 
     it("given multiple splits, it triggers a bundle payment to multiple recipients", async () => {
-
       const bundleId = "68fe0143fa35862d934ae947";
       const hash = keccak256(bundleId);
       const seed16 = Buffer.from(hash, "hex").slice(0, 16);
@@ -1029,6 +1029,27 @@ describe("bundl", () => {
         ])
         .signers([bundlKeypair])
         .rpc();
+    });
+  });
+
+  describe("pause bundle", async () => {
+    it("pauses a bundle", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      await program.methods
+        .pauseBundle(Array.from(seed16))
+        .accounts({
+          user: user,
+        })
+        .rpc();
+
+      // Fetch the bundle account
+      const bundleAccount = await program.account.bundle.fetch(bundlePda1);
+
+      // Check bundle is paused
+      assert.ok(bundleAccount.isPaused, "Bundle is not paused");
     });
   });
 

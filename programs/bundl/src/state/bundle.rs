@@ -8,4 +8,5 @@ pub struct Bundle {
     pub last_paid: i64,
     pub user_atas: [Pubkey; 5],
     pub num_recipients: u8,
+    pub is_paused: bool,
 }
