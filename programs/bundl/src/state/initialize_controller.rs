@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount, Mint};
 use crate::UserBundlSubscriptionController;
+use crate::constant::CONTROLLER_SEED;
 
 #[derive(Accounts)]
 pub struct InitializeController<'info> {
@@ -9,7 +10,7 @@ pub struct InitializeController<'info> {
         init_if_needed, // if it fails the pda is still created with init, when re-running it uses the same pda
         payer = authority, 
         space = 8 + UserBundlSubscriptionController::INIT_SPACE, 
-        seeds = [b"controller", authority.key().as_ref()], 
+        seeds = [CONTROLLER_SEED, authority.key().as_ref()], 
         bump
     )]
     pub controller: Account<'info, UserBundlSubscriptionController>,

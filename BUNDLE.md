@@ -17,7 +17,8 @@ Note: This program uses Anchor. Ensure you have the appropriate Anchor/Solana to
 The program organizes user subscriptions via two PDA-backed accounts:
 
 - Controller PDA (one per user): Signs CPI SPL token transfers on behalf of the user.
-  - Seeds: `["controller", user_pubkey]`
+
+  - Seeds: `["controller_v2", user_pubkey]`
   - Stores: `user` (Pubkey), `user_token_account` (source SPL token account), `bump`
 
 - Bundle PDA (one per subscription “bundle”, under a controller):
@@ -26,12 +27,14 @@ The program organizes user subscriptions via two PDA-backed accounts:
     - `amount_per_interval: u64` (max budget per run)
     - `interval: i64` (seconds)
     - `last_paid: i64` (unix timestamp, 0 until first run)
-    - `user_atas: [Pubkey; 5]` (recipient ATAs)
-    - `num_recipients: u8` (1..=5)
+    - `user_atas: [Pubkey; MAX_BUNDLES_PER_CONTROLLER]` (recipient ATAs)
+    - `num_recipients: u8` (1..=MAX_BUNDLES_PER_CONTROLLER)
+    - `is_paused: bool` (whether the bundle is paused and should not trigger)
 
 A privileged Owner is allowed to add bundles and to trigger payment runs once the configured interval has elapsed.
 
 The controller PDA signs SPL token transfers using these signer seeds:
+
 - `["controller", controller.user, controller.bump]`
 
 ---
@@ -42,7 +45,15 @@ The controller PDA signs SPL token transfers using these signer seeds:
   - Only this authority can add bundles and trigger payments.
 - User: The actual token holder who initializes the controller and whose SPL token account funds are used.
 
+Additional user capabilities:
+
+- The bundle owner (the `user` / controller owner) may pause, resume, or cancel their bundles:
+  - `pause_bundle` — mark a bundle paused (prevents `trigger` from running)
+  - `resume_bundle` — unpause a previously paused bundle
+  - `cancel_bundle` — close the bundle account and return its lamports to the user
+
 Signature requirements:
+
 - initialize_controller: signed by the user.
 - add_bundle: must be signed by both the Owner and the user.
   - Owner enforces permission; user pays for account creation (payer = user).
@@ -53,11 +64,13 @@ Signature requirements:
 ## Accounts and PDAs
 
 Controller PDA
+
 - Defined in: [state/initialize_controller.rs](https://github.com/BlockApex/bundl-subs-solana-program/blob/6c837c6ddb7bb3c238ef9ce24adcef9e04266630/programs/bundl/src/state/initialize_controller.rs) and [state/user_bundl_subscription_controller.rs](https://github.com/BlockApex/bundl-subs-solana-program/blob/main/programs/bundl/src/state/user_bundl_subscription_controller.rs)
-- Seeds: `["controller", authority]`
+  -- Seeds: `["controller_v2", authority]`
 - Stores the user’s pubkey, the associated source token account, and the PDA bump.
 
 Bundle PDA
+
 - Defined in: [state/add_bundle.rs](https://github.com/BlockApex/bundl-subs-solana-program/blob/6c837c6ddb7bb3c238ef9ce24adcef9e04266630/programs/bundl/src/state/add_bundle.rs) and [state/bundle.rs](https://github.com/BlockApex/bundl-subs-solana-program/blob/main/programs/bundl/src/state/bundle.rs)
 - Seeds: `[bundle_seed_16_bytes, controller_pubkey]`
 - Stores the bundle configuration, recipients, and timing.
@@ -68,21 +81,21 @@ Bundle PDA
 
 All instruction handlers are in [lib.rs](https://github.com/BlockApex/bundl-subs-solana-program/blob/6c837c6ddb7bb3c238ef9ce24adcef9e04266630/programs/bundl/src/lib.rs).
 
-1) initialize_controller
+1. initialize_controller
 
 - Who: Any user (Signer)
 - Purpose: Initializes a controller PDA for the user and records their source token account.
 - Parameters: none
 - Accounts (summary):
   - authority: Signer (the user)
-  - controller: PDA; seeds `["controller", authority]`, init_if_needed
+  - controller: PDA; seeds `["controller_v2", authority]`, init_if_needed
   - mint_account: SPL Token mint of the token being paid out
   - from_token_account: Associated token account for (mint_account, authority)
   - token_program, system_program
 - Effects:
   - Persists the user’s pubkey, the source token account, and the PDA bump on the controller.
 
-2) add_bundle
+2. add_bundle
 
 - Who: Owner AND user (both must sign)
 - Purpose: Creates and configures a bundle for the user’s controller.
@@ -90,26 +103,26 @@ All instruction handlers are in [lib.rs](https://github.com/BlockApex/bundl-subs
   - `bundle_seed: [u8; 16]` — 16-byte identifier (e.g., a truncated keccak256)
   - `amount_per_interval: u64`
   - `interval: u64` — seconds
-  - `user_atas: [Pubkey; 5]` — recipient SPL token accounts (ATAs)
-  - `num_recipients: u8` — must be 1..=5
+  - `user_atas: [Pubkey; MAX_BUNDLES_PER_CONTROLLER]` — recipient SPL token accounts (ATAs)
+  - `num_recipients: u8` — must be 1..=MAX_BUNDLES_PER_CONTROLLER
 - Accounts (summary) [see: state/add_bundle.rs]:
-  - controller: PDA; seeds `["controller", user]`
+  - controller: PDA; seeds `["controller_v2", user]`
   - bundle: PDA; seeds `[bundle_seed, controller]`, `init_if_needed`, `payer = user`
   - authority: Signer (must equal Owner; enforced by access_control in lib.rs)
   - user: Signer (payer for bundle account allocation)
   - system_program
 - Validations and effects (lib.rs):
-  - Enforces 1..=5 recipients.
+  - Enforces 1..=MAX_BUNDLES_PER_CONTROLLER recipients.
   - Stores `amount_per_interval`, `interval`, initializes `last_paid = 0`.
   - Persists recipients and `num_recipients`.
 
-3) trigger
+3. trigger
 
 - Who: Owner (Signer)
 - Purpose: Executes a payment run if the configured interval has elapsed.
 - Parameters:
   - `bundle_seed: [u8; 16]`
-  - `amounts: [u64; 5]` — only the first `num_recipients` entries are used
+  - `amounts: [u64; MAX_BUNDLES_PER_CONTROLLER]` — only the first `num_recipients` entries are used
 - Accounts (summary):
   - controller: User’s controller PDA
   - bundle: The bundle PDA for this seed
@@ -119,6 +132,7 @@ All instruction handlers are in [lib.rs](https://github.com/BlockApex/bundl-subs
 - Validations (lib.rs):
   - Provided recipient accounts length must equal `bundle.num_recipients`.
   - `Clock::get().unix_timestamp - bundle.last_paid >= bundle.interval`.
+  - `bundle.is_paused` must be `false` (paused bundles will error with `BundlePaused`).
   - Sum of active `amounts` entries must be <= `bundle.amount_per_interval`.
   - `user_token_account.amount` must be >= total.
   - Each provided recipient account must equal the stored `bundle.user_atas[i]`.
@@ -141,30 +155,35 @@ Defined in [error.rs](https://github.com/BlockApex/bundl-subs-solana-program/blo
 - Unauthorized — Caller is not the Owner.
 - IntervalNotPassed — Interval has not elapsed since last payment.
 - InvalidTotalAmount — Sum of `amounts` exceeds `amount_per_interval`.
-- InvalidNumRecipients — Number of recipients must be 1..=5.
+- InvalidNumRecipients — Number of recipients must be 1..=MAX_BUNDLES_PER_CONTROLLER.
 - InvalidNumRecipientsProvided — Mismatch between provided accounts and `num_recipients`.
 - InvalidRecipient — Provided recipient ATA does not match the stored one.
+- BundlePaused — The bundle is paused and cannot be triggered.
 
 ---
 
 ## Build, Test, Deploy
 
 Prerequisites:
+
 - Rust (as per `rust-toolchain.toml`)
 - Anchor CLI
 - Node.js / yarn (for tests/clients)
 
 Build:
+
 ```bash
 anchor build
 ```
 
 Test (if tests present under `tests/`):
+
 ```bash
 anchor test
 ```
 
 Deploy:
+
 ```bash
 anchor deploy
 ```
@@ -175,33 +194,43 @@ Configure `Anchor.toml` for localnet/devnet/mainnet as needed.
 
 ## Client Integration Guide
 
-1) Prepare the user’s SPL token account
+1. Prepare the user’s SPL token account
+
 - User must have an ATA for the desired mint with sufficient balance.
 
-2) Initialize controller (user signs)
+2. Initialize controller (user signs)
+
 ```ts
 // PDA derivation
-const PROGRAM_ID = new PublicKey("FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i");
+const PROGRAM_ID = new PublicKey(
+  "FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i"
+);
 const [controllerPda] = PublicKey.findProgramAddressSync(
-  [Buffer.from("controller"), user.publicKey.toBuffer()],
+  [Buffer.from("controller_v2"), user.publicKey.toBuffer()],
   PROGRAM_ID
 );
 
 // Initialize
-await program.methods.initializeController().accounts({
-  authority: user.publicKey,
-  controller: controllerPda,
-  mintAccount: mint,                 // the mint for the token you’ll pay with
-  fromTokenAccount: userTokenAccount,
-  tokenProgram: TOKEN_PROGRAM_ID,
-  systemProgram: SystemProgram.programId,
-}).signers([user]).rpc();
+await program.methods
+  .initializeController()
+  .accounts({
+    authority: user.publicKey,
+    controller: controllerPda,
+    mintAccount: mint, // the mint for the token you’ll pay with
+    fromTokenAccount: userTokenAccount,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    systemProgram: SystemProgram.programId,
+  })
+  .signers([user])
+  .rpc();
 ```
 
-3) Approve controller PDA on the token account
+3. Approve controller PDA on the token account
+
 - Either set the controller PDA as the account owner OR approve it as a delegate with sufficient allowance for ongoing transfers.
 
-4) Add a bundle (requires signatures from Owner AND user)
+4. Add a bundle (requires signatures from Owner AND user)
+
 ```ts
 // Bundle PDA derivation uses [bundleSeed16, controllerPda]
 const [bundlePda] = PublicKey.findProgramAddressSync(
@@ -209,45 +238,57 @@ const [bundlePda] = PublicKey.findProgramAddressSync(
   PROGRAM_ID
 );
 
-await program.methods.addBundle(
-  bundleSeed16,              // [u8;16]
-  amountPerInterval,         // u64
-  intervalSeconds,           // u64
-  recipientAtas5,            // [Pubkey;5]
-  numRecipients,             // u8 (1..=5)
-).accounts({
-  controller: controllerPda,
-  bundle: bundlePda,
-  authority: owner.publicKey,        // must equal hardcoded Owner
-  user: user.publicKey,              // payer = user
-  systemProgram: SystemProgram.programId,
-}).signers([owner, user]).rpc();      // both must sign
+await program.methods
+  .addBundle(
+    bundleSeed16, // [u8;16]
+    amountPerInterval, // u64
+    intervalSeconds, // u64
+    recipientAtas5, // [Pubkey;MAX_BUNDLES_PER_CONTROLLER]
+    numRecipients // u8 (1..=MAX_BUNDLES_PER_CONTROLLER)
+  )
+  .accounts({
+    controller: controllerPda,
+    bundle: bundlePda,
+    authority: owner.publicKey, // must equal hardcoded Owner
+    user: user.publicKey, // payer = user
+    systemProgram: SystemProgram.programId,
+  })
+  .signers([owner, user])
+  .rpc(); // both must sign
 ```
 
-5) Trigger payments (Owner signs)
+5. Trigger payments (Owner signs)
+
 ```ts
-await program.methods.trigger(
-  bundleSeed16,
-  amounts5, // [u64;5], only first numRecipients entries used
-).accounts({
-  controller: controllerPda,
-  bundle: bundlePda,
-  userTokenAccount,                  // must match controller.user_token_account
-  tokenProgram: TOKEN_PROGRAM_ID,
-  authority: owner.publicKey,
-}).remainingAccounts(
-  recipientAtas.slice(0, numRecipients).map((pubkey) => ({
-    pubkey, isWritable: true, isSigner: false
-  }))
-).signers([owner]).rpc();
+await program.methods
+  .trigger(
+    bundleSeed16,
+    amounts5 // [u64;MAX_BUNDLES_PER_CONTROLLER], only first numRecipients entries used
+  )
+  .accounts({
+    controller: controllerPda,
+    bundle: bundlePda,
+    userTokenAccount, // must match controller.user_token_account
+    tokenProgram: TOKEN_PROGRAM_ID,
+    authority: owner.publicKey,
+  })
+  .remainingAccounts(
+    recipientAtas.slice(0, numRecipients).map((pubkey) => ({
+      pubkey,
+      isWritable: true,
+      isSigner: false,
+    }))
+  )
+  .signers([owner])
+  .rpc();
 ```
 
 ---
 
 ## Constraints and Limits
 
-- Max recipients per bundle: 5
-- `amounts` and `user_atas` arrays are fixed length 5; only the first `num_recipients` are active.
+- Max recipients per bundle: MAX_BUNDLES_PER_CONTROLLER
+- `amounts` and `user_atas` arrays are fixed length MAX_BUNDLES_PER_CONTROLLER; only the first `num_recipients` are active.
 - Time values (`interval`, `last_paid`) are unix seconds.
 - add_bundle must be signed by both Owner and user; trigger by Owner only.
 

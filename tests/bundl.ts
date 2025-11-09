@@ -8,7 +8,7 @@ import {
   mintTo,
 } from "@solana/spl-token";
 import { BN } from "bn.js";
-import { assert } from "chai";
+import { assert, expect } from "chai";
 import * as dotenv from "dotenv";
 import { keccak256 } from "js-sha3";
 import { Bundl } from "../target/types/bundl";
@@ -44,6 +44,9 @@ describe("bundl", () => {
   let recipientTokenAccount1: anchor.web3.PublicKey;
   let recipientTokenAccount2: anchor.web3.PublicKey;
   let recipientTokenAccount3: anchor.web3.PublicKey;
+
+  // env related variables
+  const MAX_BUNDLES_PER_CONTROLLER = 10;
 
   before(async () => {
     // Airdrop some SOL to the user and recipient
@@ -108,7 +111,7 @@ describe("bundl", () => {
     // Step 4: Derive controller PDA
     [controllerPda, controllerBump] =
       await anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("controller"), user.toBuffer()],
+        [Buffer.from("controller_v2"), user.toBuffer()],
         program.programId
       );
   });
@@ -272,7 +275,7 @@ describe("bundl", () => {
       assert.ok(failed, "Expected call to fail but it succeeded");
     });
 
-    it("given more than 5 recipients, then fails with `InvalidNumRecipients`", async () => {
+    it("given more than MAX_BUNDLES_PER_CONTROLLER recipients, then fails with `InvalidNumRecipients`", async () => {
       const amountPerInterval = 100_000_000; // 100 USDC
       const interval = 30 * 24 * 60 * 60; // 30 days in seconds
       const bundleId = "test-too-many-recipients";
@@ -295,8 +298,13 @@ describe("bundl", () => {
               anchor.web3.PublicKey.default,
               anchor.web3.PublicKey.default,
               anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
+              anchor.web3.PublicKey.default,
             ],
-            6 // More than 5 recipients
+            11 // More than MAX_BUNDLES_PER_CONTROLLER recipients
           )
           .accounts({
             user: user,
@@ -419,6 +427,7 @@ describe("bundl", () => {
       assert.ok(
         bundleAccount.userAtas[4].equals(anchor.web3.SystemProgram.programId)
       );
+      assert.ok(!bundleAccount.isPaused, "Bundle is paused");
 
       // get sol amount of user after
       const userBalanceAfter = await provider.connection.getBalance(user);
@@ -441,6 +450,11 @@ describe("bundl", () => {
   describe("trigger", async () => {
     let amountArray = [
       new BN(100_000_000),
+      new BN(0),
+      new BN(0),
+      new BN(0),
+      new BN(0),
+      new BN(0),
       new BN(0),
       new BN(0),
       new BN(0),
@@ -517,6 +531,11 @@ describe("bundl", () => {
         await program.methods
           .trigger(Array.from(seed16), [
             new BN(200_000_000),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
             new BN(0),
             new BN(0),
             new BN(0),
@@ -627,6 +646,11 @@ describe("bundl", () => {
         await program.methods
           .trigger(Array.from(seed16), [
             new BN(200),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
             new BN(0),
             new BN(0),
             new BN(0),
@@ -773,8 +797,46 @@ describe("bundl", () => {
       assert.ok(failed, "Expected call to fail but it succeeded");
     });
 
-    it("given multiple splits, it triggers a bundle payment to multiple recipients", async () => {
+    it("given paused bundle, it fails with `BundlePaused`", async () => {
+      // pause the bundle first
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
 
+      await program.methods
+        .pauseBundle(Array.from(seed16))
+        .accounts({
+          user: user,
+        })
+        .rpc();
+
+      let failed = false;
+      try {
+        await program.methods
+          .trigger(Array.from(seed16), amountArray)
+          .accounts({
+            authority: bundlKeypair.publicKey,
+            user: user,
+            mintAccount: mint,
+          })
+          .remainingAccounts([
+            {
+              pubkey: recipientTokenAccount0,
+              isWritable: true,
+              isSigner: false,
+            },
+          ])
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err)
+        assert.equal(err.error.errorCode.code, "BundlePaused");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
+    it("given multiple splits, it triggers a bundle payment to multiple recipients", async () => {
       const bundleId = "68fe0143fa35862d934ae947";
       const hash = keccak256(bundleId);
       const seed16 = Buffer.from(hash, "hex").slice(0, 16);
@@ -810,18 +872,22 @@ describe("bundl", () => {
       const offset = 8 + 8 + 8 + 8; // = 48
       const data = accountInfo.data.slice(offset);
       const atas = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < MAX_BUNDLES_PER_CONTROLLER; i++) {
         atas.push(new anchor.web3.PublicKey(data.slice(i * 32, (i + 1) * 32)));
       }
       // console.log(atas.map((x) => x.toBase58()));
 
       await program.methods
-        .trigger(
-          Array.from(seed16), [
+        .trigger(Array.from(seed16), [
           new BN(20_000_000),
           new BN(20_000_000),
           new BN(20_000_000),
           new BN(40_000_000),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
           new BN(0),
         ])
         .accounts({
@@ -939,6 +1005,11 @@ describe("bundl", () => {
             anchor.web3.PublicKey.default,
             anchor.web3.PublicKey.default,
             anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
+            anchor.web3.PublicKey.default,
           ],
           1
         )
@@ -953,6 +1024,11 @@ describe("bundl", () => {
       await program.methods
         .trigger(Array.from(seed16), [
           new BN(100_000_000),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
           new BN(0),
           new BN(0),
           new BN(0),
@@ -979,6 +1055,11 @@ describe("bundl", () => {
         await program.methods
           .trigger(Array.from(seed16), [
             new BN(100_000_000),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
+            new BN(0),
             new BN(0),
             new BN(0),
             new BN(0),
@@ -1015,6 +1096,11 @@ describe("bundl", () => {
           new BN(0),
           new BN(0),
           new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
+          new BN(0),
         ])
         .accounts({
           authority: bundlKeypair.publicKey,
@@ -1030,6 +1116,165 @@ describe("bundl", () => {
         ])
         .signers([bundlKeypair])
         .rpc();
+    });
+  });
+
+  describe("pause bundle", async () => {
+    it("pauses a bundle", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      // Make the test idempotent: if the bundle is already paused from a
+      // previous test, resume it first so we can assert the pause operation
+      // works here.
+      try {
+        const existing = await program.account.bundle.fetch(bundlePda1);
+        if (existing.isPaused) {
+          await program.methods
+            .resumeBundle(Array.from(seed16))
+            .accounts({ user: user })
+            .rpc();
+        }
+      } catch (err) {
+        throw err;
+      }
+
+      await program.methods
+        .pauseBundle(Array.from(seed16))
+        .accounts({
+          user: user,
+        })
+        .rpc();
+
+      // Fetch the bundle account
+      const bundleAccount = await program.account.bundle.fetch(bundlePda1);
+
+      // Check bundle is paused
+      assert.ok(bundleAccount.isPaused, "Bundle is not paused");
+    });
+
+    it("given already paused bundle, should return error", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      let failed = false;
+      try {
+        await program.methods
+          .pauseBundle(Array.from(seed16))
+          .accounts({
+            user: user,
+          })
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err);
+        assert.equal(err.error.errorCode.code, "BundleAlreadyPaused");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+  });
+
+  describe("unpause bundle", async () => {
+    it("unpauses a bundle", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      await program.methods
+        .resumeBundle(Array.from(seed16))
+        .accounts({
+          user: user,
+        })
+        .rpc();
+
+      // Fetch the bundle account
+      const bundleAccount = await program.account.bundle.fetch(bundlePda1);
+
+      // Check bundle is unpaused
+      assert.ok(!bundleAccount.isPaused, "Bundle is still paused");
+    });
+
+    it("given already unpaused bundle, should return error", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      let failed = false;
+      try {
+        await program.methods
+          .resumeBundle(Array.from(seed16))
+          .accounts({
+            user: user,
+          })
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err);
+        assert.equal(err.error.errorCode.code, "BundleAlreadyUnpaused");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+  });
+
+  describe("cancel bundle", async () => {
+    it("given incorrect signer, should return error", async () => {
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      let failed = false;
+      try {
+        await program.methods
+          .cancelBundle(Array.from(seed16))
+          .accounts({
+            user: user,
+          })
+          .signers([bundlKeypair])
+          .rpc();
+      } catch (err: any) {
+        failed = true;
+        // console.log(err);
+        expect(err.toString()).to.include("Error: unknown signer:");
+      }
+      assert.ok(failed, "Expected call to fail but it succeeded");
+    });
+
+    it("cancels a bundle", async () => {
+      // fetch user sol balance before
+      const userBalanceBefore = await provider.connection.getBalance(user);
+      const bundleId = "bundle-trigger-1";
+      const hash = keccak256(bundleId);
+      const seed16 = Buffer.from(hash, "hex").slice(0, 16);
+
+      await program.methods
+        .cancelBundle(Array.from(seed16))
+        .accounts({
+          user: user,
+        })
+        .rpc();
+
+      // Try to fetch the bundle account — should fail
+      let failed = false;
+      try {
+        await program.account.bundle.fetch(bundlePda1);
+      } catch (err: any) {
+        // Error: Account does not exist or has no data
+        expect(err.toString()).to.include(
+          "Error: Account does not exist or has no data"
+        );
+        failed = true;
+      }
+      assert.ok(failed, "Expected fetch to fail but it succeeded");
+
+      // fetch user sol balance after
+      const userBalanceAfter = await provider.connection.getBalance(user);
+      // user balance after should be more to indicate rent refunded
+      assert.ok(
+        userBalanceAfter > userBalanceBefore,
+        "user did not receive rent refund"
+      );
     });
   });
 });

@@ -3,6 +3,7 @@ pub mod state;
 pub use state::*;
 pub mod error;
 use crate::error::ErrorCode;
+pub mod constant;
 
 declare_id!("FUEepu5sAshZAfkqWNszgymFj6xcymv5AVwVY2c6zY6i");
 
@@ -17,9 +18,7 @@ pub mod bundl {
     /// Initializes the user bundl subscription controller account
     /// # Arguments
     /// * `ctx` - The context containing the accounts involved in the transaction
-    pub fn initialize_controller(
-        ctx: Context<InitializeController>,
-    ) -> Result<()> {
+    pub fn initialize_controller(ctx: Context<InitializeController>) -> Result<()> {
         // read from ctx
         let controller = &mut ctx.accounts.controller;
         let user_token_account = &ctx.accounts.from_token_account;
@@ -62,11 +61,11 @@ pub mod bundl {
         bundle_seed: [u8; 16],
         amount_per_interval: u64,
         interval: u64,
-        user_atas: [Pubkey; 5],
+        user_atas: [Pubkey; constant::MAX_BUNDLES_PER_CONTROLLER as usize],
         num_recipients: u8,
     ) -> Result<()> {
         // assert valid num_recipients
-        if num_recipients == 0 || num_recipients > 5 {
+        if num_recipients == 0 || num_recipients > constant::MAX_BUNDLES_PER_CONTROLLER {
             return Err(error!(ErrorCode::InvalidNumRecipients));
         }
 
@@ -79,6 +78,7 @@ pub mod bundl {
         bundle.last_paid = 0;
         bundle.user_atas = user_atas;
         bundle.num_recipients = num_recipients;
+        bundle.is_paused = false;
 
         msg!(
             "Bundle {} added successfully with seed {:?}",
@@ -100,7 +100,7 @@ pub mod bundl {
     pub fn trigger<'info>(
         ctx: Context<'_, '_, 'info, 'info, Trigger<'info>>,
         bundle_seed: [u8; 16],
-        amounts: [u64; 5],
+        amounts: [u64; constant::MAX_BUNDLES_PER_CONTROLLER as usize],
     ) -> Result<()> {
         // read from ctx
         let bundle = &mut ctx.accounts.bundle;
@@ -113,6 +113,8 @@ pub mod bundl {
             bundle.num_recipients as usize,
             ErrorCode::InvalidNumRecipientsProvided
         );
+
+        require_eq!(bundle.is_paused, false, ErrorCode::BundlePaused);
 
         // check if enough time has passed since last payment
         let clock = Clock::get()?;
@@ -163,7 +165,7 @@ pub mod bundl {
             let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
             anchor_spl::token::transfer(
                 cpi_ctx.with_signer(&[&[
-                    b"controller",
+                    constant::CONTROLLER_SEED,
                     controller.user.as_ref(),
                     &[controller.bump],
                 ]]),
@@ -181,6 +183,42 @@ pub mod bundl {
             bundle_seed
         );
 
+        Ok(())
+    }
+
+    /// Cancels the specified bundle and closes its account
+    /// # Arguments
+    /// * `ctx` - The context containing the accounts involved in the transaction
+    /// * `bundle_seed` - The identifier of the bundle to cancel
+    pub fn cancel_bundle(ctx: Context<CancelBundle>, _bundle_seed: [u8; 16]) -> Result<()> {
+        let bundle = &ctx.accounts.bundle;
+        msg!("Bundle {} cancelled", bundle.key());
+        Ok(())
+    }
+
+    /// Pauses the specified bundle, preventing further payments
+    /// # Arguments
+    /// * `ctx` - The context containing the accounts involved in the transaction
+    /// * `_bundle_seed` - The identifier of the bundle to pause
+    pub fn pause_bundle(ctx: Context<PauseBundle>, _bundle_seed: [u8; 16]) -> Result<()> {
+        let bundle = &mut ctx.accounts.bundle;
+        require_eq!(bundle.is_paused, false, ErrorCode::BundleAlreadyPaused);
+
+        bundle.is_paused = true;
+        msg!("Bundle {} paused", bundle.key());
+        Ok(())
+    }
+
+    /// Resumes the specified bundle, allowing payments to continue
+    /// # Arguments
+    /// * `ctx` - The context containing the accounts involved in the transaction
+    /// * `_bundle_seed` - The identifier of the bundle to resume
+    pub fn resume_bundle(ctx: Context<ResumeBundle>, _bundle_seed: [u8; 16]) -> Result<()> {
+        let bundle = &mut ctx.accounts.bundle;
+        require_eq!(bundle.is_paused, true, ErrorCode::BundleAlreadyUnpaused);
+
+        bundle.is_paused = false;
+        msg!("Bundle {} resumed", bundle.key());
         Ok(())
     }
 }
